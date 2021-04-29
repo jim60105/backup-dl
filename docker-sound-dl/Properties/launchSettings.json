@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "docker-sound-dl": {
+      "commandName": "Project"
+    },
+    "Docker": {
+      "commandName": "Docker"
+    }
+  }
+}
