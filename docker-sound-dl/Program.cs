@@ -38,8 +38,8 @@ namespace docker_sound_dl
 
                 OptionSet optionSet = new()
                 {
-                    // 最佳音質
-                    Format = "140/m4a",
+                    // 非DASH的最佳音質
+                    Format = "251",
                     NoCheckCertificate = true,
                     Output = Path.Combine(tempDir, "%(id)s"),
                     DownloadArchive = archivePath,
