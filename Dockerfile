@@ -13,17 +13,17 @@ RUN  apt-get update \
 
 FROM mcr.microsoft.com/dotnet/sdk:5.0 AS build
 WORKDIR /src
-COPY ["docker-sound-dl/docker-sound-dl.csproj", "docker-sound-dl/"]
-RUN dotnet restore "docker-sound-dl/docker-sound-dl.csproj"
+COPY ["backup-dl/backup-dl.csproj", "backup-dl/"]
+RUN dotnet restore "backup-dl/backup-dl.csproj"
 COPY . .
-WORKDIR "/src/docker-sound-dl"
-RUN dotnet build "docker-sound-dl.csproj" -c Release -o /app/build
+WORKDIR "/src/backup-dl"
+RUN dotnet build "backup-dl.csproj" -c Release -o /app/build
 
 FROM build AS publish
-RUN dotnet publish "docker-sound-dl.csproj" -c Release -o /app/publish
+RUN dotnet publish "backup-dl.csproj" -c Release -o /app/publish
 
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
 
-ENTRYPOINT ["dotnet", "docker-sound-dl.dll"]
+ENTRYPOINT ["dotnet", "backup-dl.dll"]

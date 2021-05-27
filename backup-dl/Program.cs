@@ -8,7 +8,7 @@ using Azure.Storage.Blobs.Models;
 using YoutubeDLSharp;
 using YoutubeDLSharp.Options;
 
-namespace docker_sound_dl
+namespace backup_dl
 {
     class Program
     {
