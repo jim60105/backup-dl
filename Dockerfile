@@ -2,12 +2,13 @@
 
 FROM mcr.microsoft.com/dotnet/runtime:5.0 AS base
 WORKDIR /app
-ENV AZURE_STORAGE_CONNECTION_STRING="ChangeThis"
+ENV AZURE_STORAGE_CONNECTION_STRING_VTUBER="ChangeThis"
 ENV CHANNELS_IN_ARRAY="[\"https://www.youtube.com/channel/UCuy-kZJ7HWwUU-eKv0zUZFQ\", \"https://www.youtube.com/channel/UCBC7vYFNQoGPupe5NxPG4Bw\"]"
-RUN  apt-get update \
+ENV Max_Download=""
+RUN apt-get update \
         && apt-get -y install software-properties-common \
         && apt-get update \
-        && apt-get -y install python-pip aria2 ffmpeg \
+        && apt-get -y install python-pip aria2 ffmpeg atomicparsley\
         && rm -rf /var/lib/apt/lists/* \
         && pip install youtube-dl
 
