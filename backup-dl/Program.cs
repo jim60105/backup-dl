@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Azure.Storage.Blobs;
@@ -41,20 +42,23 @@ namespace backup_dl
 
                 OptionSet optionSet = new()
                 {
+                    IgnoreConfig = true,
                     // 非DASH的最佳品質
-                    Format = "bestvideo+251/best",
+                    Format = "bestvideo+bestaudio/best",
                     YoutubeSkipDashManifest = true,
+                    IgnoreErrors = true,
                     MergeOutputFormat = DownloadMergeFormat.Mp4,
                     NoCheckCertificate = true,
-                    Output = Path.Combine(tempDir, "%(channel_id)s/%(upload_date)s_%(id)s.mp4"),
+                    Output = Path.Combine(tempDir, "%(channel_id)s/%(upload_date)s_%(id)s.%(ext)s"),
                     DownloadArchive = archivePath,
-                    Continue = true,
-                    IgnoreErrors = true,
-                    NoOverwrites = true,
-                    EmbedThumbnail = true,
-                    AddMetadata = true,
                     ExternalDownloader = "aria2c",
-                    ExternalDownloaderArgs = "-j 16 -s 16 -x 16 -k 1M --retry-wait 10 --max-tries 10"
+                    ExternalDownloaderArgs = "-j 16 -s 16 -x 16 -k 1M --retry-wait 10 --max-tries 10",
+                    NoResizeBuffer = true,
+                    WriteThumbnail = true,
+                    WriteInfoJson = true
+                    //這兩個會在merge結束前就執行，必定造成失敗
+                    //EmbedThumbnail = true,
+                    //AddMetadata = true,
                 };
 
                 // 最大下載數
@@ -64,18 +68,23 @@ namespace backup_dl
                 }
 
                 // 下載
-#if DEBUG
-                new YoutubeDLProcess().RunAsync(
-#else
-                new YoutubeDLProcess("/usr/local/bin/youtube-dl").RunAsync(
-#endif
+                var ytdlProc = new YoutubeDLProcess("/usr/local/bin/youtube-dlc");
+                ytdlProc.OutputReceived += (o, e) => Console.WriteLine(e.Data);
+                ytdlProc.ErrorReceived += (o, e) => Console.WriteLine("ERROR: " + e.Data);
+
+                ytdlProc.RunAsync(
                     channels,
                     optionSet,
                     new System.Threading.CancellationToken()).Wait();
 
+                // TODO 合併影片資訊
+
                 // 上傳blob storage
                 List<Task> tasks = new();
-                foreach (string filePath in Directory.EnumerateFiles(tempDir, "*.mp4", SearchOption.AllDirectories))
+
+                List<string> files = Directory.EnumerateFiles(tempDir, "*.mp4", SearchOption.AllDirectories).ToList();
+                files.Add(archivePath);
+                foreach (string filePath in files)
                 {
                     tasks.Add(Task.Run(async () =>
                     {
@@ -83,7 +92,7 @@ namespace backup_dl
                         {
                             // 覆寫
                             _ = await containerClient
-                                .GetBlobClient($"{GetRelativePath(filePath, tempDir)}")
+                                .GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir + "backup-dl"))}")
                                 .UploadAsync(fs, new BlobHttpHeaders { ContentType = "video/mp4" });
                         }
                     }));
