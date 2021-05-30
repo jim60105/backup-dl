@@ -1,19 +1,23 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
+using Xabe.FFmpeg;
 using YoutubeDLSharp;
+using YoutubeDLSharp.Metadata;
 using YoutubeDLSharp.Options;
 
 namespace backup_dl
 {
     class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             // Create a BlobServiceClient object which will be used to create a container client
             string connectionString = Environment.GetEnvironmentVariable("AZURE_STORAGE_CONNECTION_STRING_VTUBER");
@@ -47,15 +51,16 @@ namespace backup_dl
                     Format = "bestvideo+bestaudio/best",
                     YoutubeSkipDashManifest = true,
                     IgnoreErrors = true,
-                    MergeOutputFormat = DownloadMergeFormat.Mp4,
+                    MergeOutputFormat = DownloadMergeFormat.Mkv,
                     NoCheckCertificate = true,
-                    Output = Path.Combine(tempDir, "%(channel_id)s/%(upload_date)s_%(id)s.%(ext)s"),
+                    Output = Path.Combine(tempDir, "%(channel_id)s/%(id)s.%(ext)s"),
                     DownloadArchive = archivePath,
                     ExternalDownloader = "aria2c",
                     ExternalDownloaderArgs = "-j 16 -s 16 -x 16 -k 1M --retry-wait 10 --max-tries 10",
                     NoResizeBuffer = true,
                     WriteThumbnail = true,
-                    WriteInfoJson = true
+                    //WriteInfoJson = true,
+                    
                     //這兩個會在merge結束前就執行，必定造成失敗
                     //EmbedThumbnail = true,
                     //AddMetadata = true,
@@ -68,21 +73,49 @@ namespace backup_dl
                 }
 
                 // 下載
-                var ytdlProc = new YoutubeDLProcess("/usr/local/bin/youtube-dlc");
+                string ytdlPath = "/usr/local/bin/youtube-dlc";
+                var ytdlProc = new YoutubeDLProcess(ytdlPath);
                 ytdlProc.OutputReceived += (o, e) => Console.WriteLine(e.Data);
                 ytdlProc.ErrorReceived += (o, e) => Console.WriteLine("ERROR: " + e.Data);
 
                 ytdlProc.RunAsync(
                     channels,
                     optionSet,
-                    new System.Threading.CancellationToken()).Wait();
+                    new CancellationToken()).Wait();
 
-                // TODO 合併影片資訊
+                // 加封面圖和影片資訊
+                List<Task> tasks = new();
+                List<string> files = Directory.EnumerateFiles(tempDir, "*.mkv", SearchOption.AllDirectories).ToList();
+                YoutubeDL ytdl = new();
+                ytdl.YoutubeDLPath = ytdlPath;
+                foreach (string filePath in files)
+                {
+                    string id = Path.GetFileNameWithoutExtension(filePath);
+                    string oldPath = filePath;
+                    CancellationTokenSource cancel = new();
+
+                    tasks.Add(
+                        ytdl.RunVideoDataFetch($"https://www.youtube.com/watch?v={id}")
+                            .ContinueWith((res) =>
+                            {
+                                VideoData videoData = res.IsCompletedSuccessfully ? res.Result.Data : null;
+                                string newPath = CalculatePath(ref oldPath, videoData?.Title);
+                                AddThumbNailImage(filePath, oldPath).Wait();
+
+                                return (newPath, videoData);
+                            })
+                            .ContinueWith((res) =>
+                            {
+                                (string newPath, VideoData video) = res.Result;
+                                AddMetaData(oldPath, newPath, video).Wait();
+                            })
+                    );
+                }
+                Task.WaitAll(tasks.ToArray());
 
                 // 上傳blob storage
-                List<Task> tasks = new();
-
-                List<string> files = Directory.EnumerateFiles(tempDir, "*.mp4", SearchOption.AllDirectories).ToList();
+                tasks.Clear();
+                files = Directory.EnumerateFiles(tempDir, "*.mkv", SearchOption.AllDirectories).ToList();
                 files.Add(archivePath);
                 foreach (string filePath in files)
                 {
@@ -93,7 +126,7 @@ namespace backup_dl
                             // 覆寫
                             _ = await containerClient
                                 .GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir + "backup-dl"))}")
-                                .UploadAsync(fs, new BlobHttpHeaders { ContentType = "video/mp4" });
+                                .UploadAsync(fs, new BlobHttpHeaders { ContentType = "video/x-matroska" });
                         }
                     }));
                 }
@@ -103,6 +136,131 @@ namespace backup_dl
             finally
             {
                 Directory.Delete(tempDir, true);
+            }
+        }
+
+        /// <summary>
+        /// 轉成mp4
+        /// </summary>
+        /// <param name="filePath"></param>
+        /// <returns></returns>
+        private static async Task<string> ConvertToMp4Async(string filePath)
+        {
+            string id = Path.GetFileNameWithoutExtension(filePath);
+            string tempPath = Path.Combine(Path.GetDirectoryName(filePath), id + ".mp4");
+            var conversion = await FFmpeg.Conversions.FromSnippet.ToMp4(filePath, tempPath);
+            _ = await conversion.Start();
+            return tempPath;
+        }
+
+        /// <summary>
+        /// 路徑做檢查和轉換
+        /// </summary>
+        /// <param name="oldPath"></param>
+        /// <param name="title"></param>
+        /// <returns></returns>
+        private static string CalculatePath(ref string oldPath, string title)
+        {
+            title ??= "";
+
+            string newPath = Path.Combine(Path.GetDirectoryName(oldPath), title + Path.GetExtension(oldPath));
+            if (!PathIsValid(newPath))
+            {
+                // 取代掉非法字元
+                newPath = string.Join(string.Empty, newPath.Split(Path.GetInvalidFileNameChars()));
+            }
+            if (!PathIsValid(newPath) || string.IsNullOrEmpty(title))
+            {
+                // 延用舊檔名，先將原檔移到暫存路徑，ffmpeg轉換時輸出至原位
+                newPath = oldPath;
+                oldPath = Path.GetTempFileName();
+                File.Move(newPath, oldPath);
+                File.Delete(newPath);
+            }
+
+            return newPath;
+        }
+
+        // https://codereview.stackexchange.com/questions/120002/windows-filepath-and-filename-validation
+        private static bool PathIsValid(string inputPath)
+        {
+            try
+            {
+                _ = Path.GetFullPath(inputPath);
+                return true;
+            }
+            catch (PathTooLongException)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 加封面圖
+        /// </summary>
+        /// <param name="oldPath"></param>
+        /// <param name="newPath"></param>
+        /// <returns></returns>
+        private static async Task AddThumbNailImage(string oldPath, string newPath)
+        {
+            string imagePathName = Path.Combine(Path.GetDirectoryName(oldPath), Path.GetFileNameWithoutExtension(oldPath));
+            string jpgPath = imagePathName + ".jpg";
+
+            string[] extensions = { ".jpeg", ".gif", ".png", ".bmp", ".webp" };
+            foreach (var ext in extensions)
+            {
+                string sourceImgPath = imagePathName + ext;
+                if (File.Exists(sourceImgPath))
+                {
+                    _ = await new Conversion().AddParameter($" -i \"{sourceImgPath}\" ")
+                                              .SetOutput(jpgPath)
+                                              .Start();
+                    break;
+                }
+            }
+
+            if (File.Exists(jpgPath))
+            {
+                var tempPath = Path.GetTempFileName();
+                IConversion conversion = new Conversion().AddParameter($" -i \"{newPath}\" -y ", ParameterPosition.PreInput)
+                                                         .AddParameter($" -i \"{jpgPath}\" -map 1 -map 0 -codec copy -disposition:0 attached_pic ", ParameterPosition.PreInput)
+                                                         .SetOutputFormat(Format.matroska)
+                                                         .SetOutput(tempPath);
+                //Console.WriteLine(conversion.Build());
+                IConversionResult convRes = await conversion.Start();
+                File.Delete(newPath);
+                File.Move(tempPath, newPath);
+            }
+        }
+
+        /// <summary>
+        /// 加MetaData
+        /// </summary>
+        /// <param name="oldPath"></param>
+        /// <param name="newPath"></param>
+        /// <param name="video"></param>
+        /// <returns></returns>
+        private static async Task AddMetaData(string oldPath, string newPath, VideoData video)
+        {
+            // 加MetaData
+            string title = video.Title;
+            string artist = video.Uploader;
+            DateTime date = video.UploadDate ?? DateTime.Now;
+            string description = video.Description;
+
+            IEnumerable<IStream> list = FFmpeg.GetMediaInfo(oldPath)
+                                       .GetAwaiter()
+                                       .GetResult()
+                                       .Streams;
+            string argument = $" -metadata title=\"{title}\" -metadata artist=\"{artist}\" -metadata date=\"{date:u}\" -metadata description=\"{description}\" -metadata comment=\"{description}\"";
+            IConversion conversion = new Conversion().AddStream(list)
+                                                     .AddParameter(argument)
+                                                     .SetOutput(newPath);
+            IConversionResult convRes = await conversion.Start();
+
+            if (File.Exists(newPath))
+            {
+                File.Delete(oldPath);
             }
         }
 
