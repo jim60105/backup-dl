@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Data;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -17,7 +16,7 @@ namespace backup_dl
 {
     class Program
     {
-        static async Task Main(string[] args)
+        static void Main(string[] args)
         {
             // Create a BlobServiceClient object which will be used to create a container client
             string connectionString = Environment.GetEnvironmentVariable("AZURE_STORAGE_CONNECTION_STRING_VTUBER");
@@ -60,7 +59,7 @@ namespace backup_dl
                     NoResizeBuffer = true,
                     WriteThumbnail = true,
                     //WriteInfoJson = true,
-                    
+
                     //這兩個會在merge結束前就執行，必定造成失敗
                     //EmbedThumbnail = true,
                     //AddMetadata = true,
@@ -100,14 +99,12 @@ namespace backup_dl
                             {
                                 VideoData videoData = res.IsCompletedSuccessfully ? res.Result.Data : null;
                                 string newPath = CalculatePath(ref oldPath, videoData?.Title);
-                                AddThumbNailImage(filePath, oldPath).Wait();
-
-                                return (newPath, videoData);
+                                AddMetaData(oldPath, newPath, videoData).Wait();
+                                return newPath;
                             })
                             .ContinueWith((res) =>
                             {
-                                (string newPath, VideoData video) = res.Result;
-                                AddMetaData(oldPath, newPath, video).Wait();
+                                AddThumbNailImage(filePath, res.Result).Wait();
                             })
                     );
                 }
@@ -125,7 +122,7 @@ namespace backup_dl
                         {
                             // 覆寫
                             _ = await containerClient
-                                .GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir + "backup-dl"))}")
+                                .GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}")
                                 .UploadAsync(fs, new BlobHttpHeaders { ContentType = "video/x-matroska" });
                         }
                     }));
@@ -222,12 +219,26 @@ namespace backup_dl
             if (File.Exists(jpgPath))
             {
                 var tempPath = Path.GetTempFileName();
-                IConversion conversion = new Conversion().AddParameter($" -i \"{newPath}\" -y ", ParameterPosition.PreInput)
-                                                         .AddParameter($" -i \"{jpgPath}\" -map 1 -map 0 -codec copy -disposition:0 attached_pic ", ParameterPosition.PreInput)
+
+                //FFmpeg method
+                IConversion conversion = new Conversion().AddParameter($" -i \"{newPath}\" -y -codec copy", ParameterPosition.PreInput)
+                                                         .AddParameter($" -attach \"{jpgPath}\" -map 0 -metadata:s:t:0 mimetype=image/jpeg -metadata:s:t:0 filename=cover.jpg ", ParameterPosition.PreInput)
                                                          .SetOutputFormat(Format.matroska)
                                                          .SetOutput(tempPath);
                 //Console.WriteLine(conversion.Build());
                 IConversionResult convRes = await conversion.Start();
+
+                ////AtomicParsley method(Only works with mp3/ mp4 / m4a)
+                ////Not tested.
+                //using (System.Diagnostics.Process proc = new())
+                //{
+                //    proc.StartInfo.RedirectStandardError = proc.StartInfo.RedirectStandardOutput = true;
+                //    proc.StartInfo.FileName = "AtomicParsley";
+                //    proc.StartInfo.Arguments = $"{newPath} --artwork {jpgPath} -o {tempPath}";
+                //    _ = proc.Start();
+                //    proc.WaitForExit();
+                //}
+
                 File.Delete(newPath);
                 File.Move(tempPath, newPath);
             }
@@ -248,14 +259,10 @@ namespace backup_dl
             DateTime date = video.UploadDate ?? DateTime.Now;
             string description = video.Description;
 
-            IEnumerable<IStream> list = FFmpeg.GetMediaInfo(oldPath)
-                                       .GetAwaiter()
-                                       .GetResult()
-                                       .Streams;
-            string argument = $" -metadata title=\"{title}\" -metadata artist=\"{artist}\" -metadata date=\"{date:u}\" -metadata description=\"{description}\" -metadata comment=\"{description}\"";
-            IConversion conversion = new Conversion().AddStream(list)
-                                                     .AddParameter(argument)
+            IConversion conversion = new Conversion().AddParameter($"-i \"{oldPath}\" -y -codec copy -map 0", ParameterPosition.PreInput)
+                                                     .AddParameter($"-metadata title=\"{title}\" -metadata artist=\"{artist}\" -metadata date=\"{date:u}\" -metadata description=\"{description}\" -metadata comment=\"{description}\"", ParameterPosition.PreInput)
                                                      .SetOutput(newPath);
+            //Console.WriteLine(conversion.Build());
             IConversionResult convRes = await conversion.Start();
 
             if (File.Exists(newPath))
