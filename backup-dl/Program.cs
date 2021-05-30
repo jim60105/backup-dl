@@ -90,7 +90,6 @@ namespace backup_dl
                 foreach (string filePath in files)
                 {
                     string id = Path.GetFileNameWithoutExtension(filePath);
-                    string oldPath = filePath;
                     CancellationTokenSource cancel = new();
 
                     tasks.Add(
@@ -98,13 +97,19 @@ namespace backup_dl
                             .ContinueWith((res) =>
                             {
                                 VideoData videoData = res.IsCompletedSuccessfully ? res.Result.Data : null;
-                                string newPath = CalculatePath(ref oldPath, videoData?.Title);
-                                AddMetaData(oldPath, newPath, videoData).Wait();
+                                string newPath = CalculatePath(filePath, videoData?.Title);
+                                return (newPath, videoData);
+                            })
+                            .ContinueWith((res) =>
+                            {
+                                (string newPath, VideoData videoData) = res.Result;
+                                AddMetaData(newPath, videoData).Wait();
                                 return newPath;
                             })
                             .ContinueWith((res) =>
                             {
-                                AddThumbNailImage(filePath, res.Result).Wait();
+                                string newPath = res.Result;
+                                AddThumbNailImage(filePath, newPath).Wait();
                             })
                     );
                 }
@@ -156,7 +161,7 @@ namespace backup_dl
         /// <param name="oldPath"></param>
         /// <param name="title"></param>
         /// <returns></returns>
-        private static string CalculatePath(ref string oldPath, string title)
+        private static string CalculatePath(string oldPath, string title)
         {
             title ??= "";
 
@@ -170,9 +175,11 @@ namespace backup_dl
             {
                 // 延用舊檔名，先將原檔移到暫存路徑，ffmpeg轉換時輸出至原位
                 newPath = oldPath;
-                oldPath = Path.GetTempFileName();
-                File.Move(newPath, oldPath);
-                File.Delete(newPath);
+            }
+            if (newPath != oldPath)
+            {
+                File.Move(oldPath, newPath);
+                File.Delete(oldPath);
             }
 
             return newPath;
@@ -195,12 +202,12 @@ namespace backup_dl
         /// <summary>
         /// 加封面圖
         /// </summary>
-        /// <param name="oldPath"></param>
-        /// <param name="newPath"></param>
+        /// <param name="thumbPath"></param>
+        /// <param name="filePath"></param>
         /// <returns></returns>
-        private static async Task AddThumbNailImage(string oldPath, string newPath)
+        private static async Task AddThumbNailImage(string thumbPath, string filePath)
         {
-            string imagePathName = Path.Combine(Path.GetDirectoryName(oldPath), Path.GetFileNameWithoutExtension(oldPath));
+            string imagePathName = Path.Combine(Path.GetDirectoryName(thumbPath), Path.GetFileNameWithoutExtension(thumbPath));
             string jpgPath = imagePathName + ".jpg";
 
             string[] extensions = { ".jpeg", ".gif", ".png", ".bmp", ".webp" };
@@ -221,7 +228,7 @@ namespace backup_dl
                 var tempPath = Path.GetTempFileName();
 
                 //FFmpeg method
-                IConversion conversion = new Conversion().AddParameter($" -i \"{newPath}\" -y -codec copy", ParameterPosition.PreInput)
+                IConversion conversion = new Conversion().AddParameter($" -i \"{filePath}\" -y -codec copy", ParameterPosition.PreInput)
                                                          .AddParameter($" -attach \"{jpgPath}\" -map 0 -metadata:s:t:0 mimetype=image/jpeg -metadata:s:t:0 filename=cover.jpg ", ParameterPosition.PreInput)
                                                          .SetOutputFormat(Format.matroska)
                                                          .SetOutput(tempPath);
@@ -239,36 +246,37 @@ namespace backup_dl
                 //    proc.WaitForExit();
                 //}
 
-                File.Delete(newPath);
-                File.Move(tempPath, newPath);
+                File.Delete(filePath);
+                File.Move(tempPath, filePath);
             }
         }
 
         /// <summary>
         /// 加MetaData
         /// </summary>
-        /// <param name="oldPath"></param>
-        /// <param name="newPath"></param>
+        /// <param name="filePath"></param>
         /// <param name="video"></param>
         /// <returns></returns>
-        private static async Task AddMetaData(string oldPath, string newPath, VideoData video)
+        private static async Task AddMetaData(string filePath, VideoData video)
         {
+            if (null == video) return;
+
             // 加MetaData
             string title = video.Title;
             string artist = video.Uploader;
             DateTime date = video.UploadDate ?? DateTime.Now;
             string description = video.Description;
 
-            IConversion conversion = new Conversion().AddParameter($"-i \"{oldPath}\" -y -codec copy -map 0", ParameterPosition.PreInput)
+            var tempPath = Path.GetTempFileName();
+            IConversion conversion = new Conversion().AddParameter($"-i \"{filePath}\" -y -codec copy -map 0", ParameterPosition.PreInput)
                                                      .AddParameter($"-metadata title=\"{title}\" -metadata artist=\"{artist}\" -metadata date=\"{date:u}\" -metadata description=\"{description}\" -metadata comment=\"{description}\"", ParameterPosition.PreInput)
-                                                     .SetOutput(newPath);
+                                                     .SetOutputFormat(Format.matroska)
+                                                     .SetOutput(tempPath);
             //Console.WriteLine(conversion.Build());
             IConversionResult convRes = await conversion.Start();
 
-            if (File.Exists(newPath))
-            {
-                File.Delete(oldPath);
-            }
+            File.Delete(filePath);
+            File.Move(tempPath, filePath);
         }
 
         // https://weblog.west-wind.com/posts/2010/Dec/20/Finding-a-Relative-Path-in-NET
