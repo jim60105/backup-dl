@@ -8,9 +8,9 @@ ENV Max_Download="10"
 RUN apt-get update \
         && apt-get -y install software-properties-common \
         && apt-get update \
-        && apt-get -y install python-pip aria2 ffmpeg atomicparsley\
+        && apt-get -y install python-pip aria2 ffmpeg \
         && rm -rf /var/lib/apt/lists/* \
-        && pip install youtube-dlc
+        && pip install youtube-dl
 
 FROM mcr.microsoft.com/dotnet/sdk:5.0 AS build
 WORKDIR /src
