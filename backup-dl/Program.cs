@@ -97,7 +97,7 @@ namespace backup_dl
                             .ContinueWith((res) =>
                             {
                                 VideoData videoData = res.IsCompletedSuccessfully ? res.Result.Data : null;
-                                string newPath = CalculatePath(filePath, videoData?.Title);
+                                string newPath = CalculatePath(filePath, videoData?.Title, videoData.ReleaseDate);
                                 return (newPath, videoData);
                             })
                             .ContinueWith((res) =>
@@ -159,13 +159,15 @@ namespace backup_dl
         /// 路徑做檢查和轉換
         /// </summary>
         /// <param name="oldPath"></param>
-        /// <param name="title"></param>
+        /// <param name="title">影片標題，用做檔名</param>
+        /// <param name="date">影片日期，用做檔名</param>
         /// <returns></returns>
-        private static string CalculatePath(string oldPath, string title)
+        private static string CalculatePath(string oldPath, string title, DateTime? date)
         {
             title ??= "";
+            date ??= DateTime.Now;
 
-            string newPath = Path.Combine(Path.GetDirectoryName(oldPath), title + Path.GetExtension(oldPath));
+            string newPath = Path.Combine(Path.GetDirectoryName(oldPath), $"{date:yyyyMMdd} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
             if (!PathIsValid(newPath))
             {
                 // 取代掉非法字元
