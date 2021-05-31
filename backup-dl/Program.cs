@@ -97,7 +97,7 @@ namespace backup_dl
                             .ContinueWith((res) =>
                             {
                                 VideoData videoData = res.IsCompletedSuccessfully ? res.Result.Data : null;
-                                string newPath = CalculatePath(filePath, videoData?.Title, videoData.ReleaseDate);
+                                string newPath = CalculatePath(filePath, videoData?.Title, videoData.UploadDate);
                                 return (newPath, videoData);
                             })
                             .ContinueWith((res) =>
