@@ -165,13 +165,20 @@ namespace backup_dl
         private static string CalculatePath(string oldPath, string title, DateTime? date)
         {
             title ??= "";
+            // 取代掉檔名中的非法字元
+            title = string.Join(string.Empty, title.Split(Path.GetInvalidFileNameChars()))
+                          .Replace(".", string.Empty);
             date ??= DateTime.Now;
 
             string newPath = Path.Combine(Path.GetDirectoryName(oldPath), $"{date:yyyyMMdd} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
             if (!PathIsValid(newPath))
             {
-                // 取代掉非法字元
-                newPath = string.Join(string.Empty, newPath.Split(Path.GetInvalidFileNameChars()));
+                // 截短
+                if (newPath.Length >= 260)
+                {
+                    title = title.Substring(0, title.Length - (newPath.Length - 260) - 5) ;
+                }
+                newPath = Path.Combine(Path.GetDirectoryName(oldPath), $"{date:yyyyMMdd} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
             }
             if (!PathIsValid(newPath) || string.IsNullOrEmpty(title))
             {
