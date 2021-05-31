@@ -72,7 +72,7 @@ namespace backup_dl
                 }
 
                 // 下載
-                string ytdlPath = "/usr/local/bin/youtube-dlc";
+                string ytdlPath = "/usr/local/bin/youtube-dl";
                 var ytdlProc = new YoutubeDLProcess(ytdlPath);
                 ytdlProc.OutputReceived += (o, e) => Console.WriteLine(e.Data);
                 ytdlProc.ErrorReceived += (o, e) => Console.WriteLine("ERROR: " + e.Data);
