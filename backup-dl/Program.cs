@@ -70,7 +70,11 @@ namespace backup_dl
                 // 最大下載數
                 if (int.TryParse(Environment.GetEnvironmentVariable("Max_Download"), out int maxDownload))
                 {
-                    optionSet.MaxDownloads = maxDownload;
+                    optionSet.MaxDownloads = 1;
+                }
+                else
+                {
+                    maxDownload = 1;
                 }
 
                 // 下載
@@ -79,29 +83,35 @@ namespace backup_dl
                 ytdlProc.OutputReceived += (o, e) => Console.WriteLine(e.Data);
                 ytdlProc.ErrorReceived += (o, e) => Console.WriteLine("ERROR: " + e.Data);
 
-                ytdlProc.RunAsync(
-                    channels,
-                    optionSet,
-                    new CancellationToken()).Wait();
-
-                // 加封面圖和影片資訊
                 List<Task> tasks = new();
-                List<string> files = Directory.EnumerateFiles(tempDir, "*.mkv", SearchOption.AllDirectories).ToList();
-                YoutubeDL ytdl = new();
-                ytdl.YoutubeDLPath = ytdlPath;
-                foreach (string filePath in files)
+                List<string> fileNames = new();
+                for (int i = 0; i < maxDownload; i++)
                 {
-                    string id = Path.GetFileNameWithoutExtension(filePath);
-                    CancellationTokenSource cancel = new();
+                    ytdlProc.RunAsync(
+                        channels,
+                        optionSet,
+                        new CancellationToken()).Wait();
 
-                    tasks.Add(
-                        ytdl.RunVideoDataFetch($"https://www.youtube.com/watch?v={id}")
+                    // 加封面圖和影片資訊
+                    List<string> files = Directory.EnumerateFiles(tempDir, "*.mkv", SearchOption.AllDirectories).ToList();
+                    YoutubeDL ytdl = new();
+                    ytdl.YoutubeDLPath = ytdlPath;
+                    foreach (string filePath in files)
+                    {
+                        string id = Path.GetFileNameWithoutExtension(filePath);
+                        if (fileNames.Contains(id)) continue;
+
+                        CancellationTokenSource cancel = new();
+
+                        fileNames.Add(id);
+                        Task<string> task = ytdl.RunVideoDataFetch($"https://www.youtube.com/watch?v={id}")
                             .ContinueWith((res) =>
                             {
                                 if (!res.IsCompletedSuccessfully) cancel.Cancel();
 
                                 VideoData videoData = res.IsCompletedSuccessfully ? res.Result.Data : null;
                                 string newPath = CalculatePath(filePath, videoData?.Title, videoData?.UploadDate);
+                                fileNames.Add(Path.GetFileNameWithoutExtension(newPath));
                                 return (newPath, videoData);
                             }, cancel.Token)
                             .ContinueWith((res) =>
@@ -124,13 +134,14 @@ namespace backup_dl
                                 Task<bool> task = UploadToAzure(containerClient, tempDir, newPath);
                                 task.Wait();
                                 return task.Result ? null : id;
-                            }, TaskContinuationOptions.ExecuteSynchronously)
-                        );
+                            }, TaskContinuationOptions.ExecuteSynchronously);
+                        tasks.Add(task);
+                    }
                 }
 
                 await Task.Factory.ContinueWhenAll(
-                    tasks.ToArray(), (tasks) =>
-
+                    tasks.ToArray(),
+                    (tasks) =>
                     {
                         List<string> faildIds = new();
                         // 移除上傳失敗項
@@ -180,18 +191,22 @@ namespace backup_dl
                     return true;
                 }
             }
-            catch (RequestFailedException)
+            catch (Exception e)
             {
-                if (retry)
+                if (e is RequestFailedException || e is TaskCanceledException)
                 {
-                    // Retry Once
-                    return await UploadToAzure(containerClient, tempDir, filePath, false);
+                    if (retry)
+                    {
+                        // Retry Once
+                        return await UploadToAzure(containerClient, tempDir, filePath, false);
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Upload Failed: {Path.GetFileName(filePath)}");
+                        return false;
+                    }
                 }
-                else
-                {
-                    Console.WriteLine($"Upload Failed: {Path.GetFileName(filePath)}");
-                    return false;
-                }
+                else { throw; }
             }
         }
 
