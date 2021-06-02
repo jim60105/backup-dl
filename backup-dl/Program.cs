@@ -89,7 +89,6 @@ namespace backup_dl
                 List<string> files = Directory.EnumerateFiles(tempDir, "*.mkv", SearchOption.AllDirectories).ToList();
                 YoutubeDL ytdl = new();
                 ytdl.YoutubeDLPath = ytdlPath;
-                List<string> faildIds = new();
                 foreach (string filePath in files)
                 {
                     string id = Path.GetFileNameWithoutExtension(filePath);
@@ -119,30 +118,29 @@ namespace backup_dl
                                 AddThumbNailImage(filePath, newPath).Wait();
                                 return newPath;
                             })
-                            .ContinueWith( (res) =>
+                            .ContinueWith((res) =>
                             {
                                 string newPath = res.Result;
                                 Task<bool> task = UploadToAzure(containerClient, tempDir, newPath);
                                 task.Wait();
-                                if (!task.Result) cancel.Cancel();
-                            }, cancel.Token)
-                            .ContinueWith((res) =>
-                            {
-                                if (res.Status == TaskStatus.Canceled | res.Status == TaskStatus.Faulted)
-                                {
-                                    faildIds.Add(id);
-                                }
-                            })
-                    ); 
+                                return task.Result ? null : id;
+                            }, TaskContinuationOptions.ExecuteSynchronously)
+                        );
                 }
 
                 await Task.Factory.ContinueWhenAll(
-                    tasks.ToArray(), (_) =>
+                    tasks.ToArray(), (tasks) =>
+
                     {
+                        List<string> faildIds = new();
                         // 移除上傳失敗項
-                        for (int i = 0; i < faildIds.Count; i++)
+                        foreach (Task<string> task in tasks)
                         {
-                            faildIds[i] = "youtube " + faildIds[i];
+                            if (task.IsCompleted && !string.IsNullOrEmpty(task.Result))
+                            {
+                                faildIds.Add("youtube " + task.Result);
+                                Console.WriteLine($"Excute Failed: {task.Result}");
+                            }
                         }
                         File.WriteAllLines(archivePath,
                                            File.ReadLines(archivePath)
@@ -150,7 +148,7 @@ namespace backup_dl
                                                .ToList());
 
                         // 上傳完成清單
-                        UploadToAzure(containerClient, tempDir, archivePath).Wait();
+                        UploadToAzure(containerClient, tempDir, archivePath, ContentType: "text/plain").Wait();
                     });
             }
             finally
@@ -166,7 +164,7 @@ namespace backup_dl
         /// <param name="tempDir">用來計算Storage內路徑的基準路徑</param>
         /// <param name="filePath">上傳檔案路徑</param>
         /// <returns></returns>
-        private static async Task<bool> UploadToAzure(BlobContainerClient containerClient, string tempDir, string filePath, bool retry = true)
+        private static async Task<bool> UploadToAzure(BlobContainerClient containerClient, string tempDir, string filePath, bool retry = true, string ContentType = "video/x-matroska")
         {
             try
             {
@@ -176,8 +174,9 @@ namespace backup_dl
                     // 覆寫
                     _ = await containerClient
                         .GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}")
-                        .UploadAsync(fs, new BlobHttpHeaders { ContentType = "video/x-matroska" });
+                        .UploadAsync(fs, new BlobHttpHeaders { ContentType = ContentType });
                     Console.WriteLine($"Finish Upload {filePath} to azure storage");
+                    File.Delete(filePath);
                     return true;
                 }
             }
@@ -322,7 +321,7 @@ namespace backup_dl
                     Console.WriteLine($"Finish Embed thumbnail: {filePath}");
                 }
             }
-            catch (AggregateException) { Console.WriteLine("Xabe.FFmpeg is dead in AddThumbNailImage"); }
+            catch (InvalidOperationException) { Console.WriteLine("Xabe.FFmpeg is dead in AddThumbNailImage"); }
         }
 
         /// <summary>
@@ -356,7 +355,7 @@ namespace backup_dl
                 File.Move(tempPath, filePath);
                 Console.WriteLine($"Finish Add matadata: {filePath}");
             }
-            catch (AggregateException) { Console.WriteLine("Xabe.FFmpeg is dead in AddMetaData"); }
+            catch (InvalidOperationException) { Console.WriteLine("Xabe.FFmpeg is dead in AddMetaData"); }
         }
 
         // https://weblog.west-wind.com/posts/2010/Dec/20/Finding-a-Relative-Path-in-NET
