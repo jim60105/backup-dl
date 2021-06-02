@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Xabe.FFmpeg;
@@ -16,7 +17,7 @@ namespace backup_dl
 {
     class Program
     {
-        static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             // Create a BlobServiceClient object which will be used to create a container client
             string connectionString = Environment.GetEnvironmentVariable("AZURE_STORAGE_CONNECTION_STRING_VTUBER");
@@ -55,10 +56,11 @@ namespace backup_dl
                     Output = Path.Combine(tempDir, "%(channel_id)s/%(id)s.%(ext)s"),
                     DownloadArchive = archivePath,
                     ExternalDownloader = "aria2c",
-                    ExternalDownloaderArgs = "-j 16 -s 16 -x 16 -k 1M --retry-wait 10 --max-tries 10",
+                    ExternalDownloaderArgs = "-j 16 -s 16 -x 16 -k 1M --retry-wait 10 --max-tries 10 --enable-color=false",
                     NoResizeBuffer = true,
                     WriteThumbnail = true,
-                    //WriteInfoJson = true,
+                    NoColor = true,
+                    WriteInfoJson = true
 
                     //這兩個會在merge結束前就執行，必定造成失敗
                     //EmbedThumbnail = true,
@@ -73,7 +75,7 @@ namespace backup_dl
 
                 // 下載
                 string ytdlPath = "/usr/local/bin/youtube-dl";
-                var ytdlProc = new YoutubeDLProcess(ytdlPath);
+                YoutubeDLProcess ytdlProc = new(ytdlPath);
                 ytdlProc.OutputReceived += (o, e) => Console.WriteLine(e.Data);
                 ytdlProc.ErrorReceived += (o, e) => Console.WriteLine("ERROR: " + e.Data);
 
@@ -87,6 +89,7 @@ namespace backup_dl
                 List<string> files = Directory.EnumerateFiles(tempDir, "*.mkv", SearchOption.AllDirectories).ToList();
                 YoutubeDL ytdl = new();
                 ytdl.YoutubeDLPath = ytdlPath;
+                List<string> faildIds = new();
                 foreach (string filePath in files)
                 {
                     string id = Path.GetFileNameWithoutExtension(filePath);
@@ -96,48 +99,100 @@ namespace backup_dl
                         ytdl.RunVideoDataFetch($"https://www.youtube.com/watch?v={id}")
                             .ContinueWith((res) =>
                             {
+                                if (!res.IsCompletedSuccessfully) cancel.Cancel();
+
                                 VideoData videoData = res.IsCompletedSuccessfully ? res.Result.Data : null;
-                                string newPath = CalculatePath(filePath, videoData?.Title, videoData.UploadDate);
+                                string newPath = CalculatePath(filePath, videoData?.Title, videoData?.UploadDate);
                                 return (newPath, videoData);
-                            })
+                            }, cancel.Token)
                             .ContinueWith((res) =>
                             {
+                                if (!res.IsCompletedSuccessfully) cancel.Cancel();
+
                                 (string newPath, VideoData videoData) = res.Result;
                                 AddMetaData(newPath, videoData).Wait();
                                 return newPath;
-                            })
+                            }, cancel.Token)
                             .ContinueWith((res) =>
                             {
                                 string newPath = res.Result;
                                 AddThumbNailImage(filePath, newPath).Wait();
+                                return newPath;
                             })
-                    );
+                            .ContinueWith( (res) =>
+                            {
+                                string newPath = res.Result;
+                                Task<bool> task = UploadToAzure(containerClient, tempDir, newPath);
+                                task.Wait();
+                                if (!task.Result) cancel.Cancel();
+                            }, cancel.Token)
+                            .ContinueWith((res) =>
+                            {
+                                if (res.Status == TaskStatus.Canceled | res.Status == TaskStatus.Faulted)
+                                {
+                                    faildIds.Add(id);
+                                }
+                            })
+                    ); 
                 }
-                Task.WaitAll(tasks.ToArray());
 
-                // 上傳blob storage
-                tasks.Clear();
-                files = Directory.EnumerateFiles(tempDir, "*.mkv", SearchOption.AllDirectories).ToList();
-                files.Add(archivePath);
-                foreach (string filePath in files)
-                {
-                    tasks.Add(Task.Run(async () =>
+                await Task.Factory.ContinueWhenAll(
+                    tasks.ToArray(), (_) =>
                     {
-                        using (FileStream fs = new(filePath, FileMode.Open, FileAccess.Read))
+                        // 移除上傳失敗項
+                        for (int i = 0; i < faildIds.Count; i++)
                         {
-                            // 覆寫
-                            _ = await containerClient
-                                .GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}")
-                                .UploadAsync(fs, new BlobHttpHeaders { ContentType = "video/x-matroska" });
+                            faildIds[i] = "youtube " + faildIds[i];
                         }
-                    }));
-                }
+                        File.WriteAllLines(archivePath,
+                                           File.ReadLines(archivePath)
+                                               .Where(l => !faildIds.Contains(l))
+                                               .ToList());
 
-                Task.WaitAll(tasks.ToArray());
+                        // 上傳完成清單
+                        UploadToAzure(containerClient, tempDir, archivePath).Wait();
+                    });
             }
             finally
             {
                 Directory.Delete(tempDir, true);
+            }
+        }
+
+        /// <summary>
+        /// 上傳檔案至Azure Blob Storage
+        /// </summary>
+        /// <param name="containerClient"></param>
+        /// <param name="tempDir">用來計算Storage內路徑的基準路徑</param>
+        /// <param name="filePath">上傳檔案路徑</param>
+        /// <returns></returns>
+        private static async Task<bool> UploadToAzure(BlobContainerClient containerClient, string tempDir, string filePath, bool retry = true)
+        {
+            try
+            {
+                using (FileStream fs = new(filePath, FileMode.Open, FileAccess.Read))
+                {
+                    Console.WriteLine($"Start Upload {filePath} to azure storage");
+                    // 覆寫
+                    _ = await containerClient
+                        .GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}")
+                        .UploadAsync(fs, new BlobHttpHeaders { ContentType = "video/x-matroska" });
+                    Console.WriteLine($"Finish Upload {filePath} to azure storage");
+                    return true;
+                }
+            }
+            catch (RequestFailedException)
+            {
+                if (retry)
+                {
+                    // Retry Once
+                    return await UploadToAzure(containerClient, tempDir, filePath, false);
+                }
+                else
+                {
+                    Console.WriteLine($"Upload Failed: {Path.GetFileName(filePath)}");
+                    return false;
+                }
             }
         }
 
@@ -176,7 +231,7 @@ namespace backup_dl
                 // 截短
                 if (newPath.Length >= 260)
                 {
-                    title = title.Substring(0, title.Length - (newPath.Length - 260) - 5) ;
+                    title = title.Substring(0, title.Length - (newPath.Length - 260) - 5);
                 }
                 newPath = Path.Combine(Path.GetDirectoryName(oldPath), $"{date:yyyyMMdd} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
             }
@@ -191,6 +246,7 @@ namespace backup_dl
                 File.Delete(oldPath);
             }
 
+            Console.WriteLine($"Rename file: {oldPath} => {newPath}");
             return newPath;
         }
 
@@ -216,48 +272,57 @@ namespace backup_dl
         /// <returns></returns>
         private static async Task AddThumbNailImage(string thumbPath, string filePath)
         {
-            string imagePathName = Path.Combine(Path.GetDirectoryName(thumbPath), Path.GetFileNameWithoutExtension(thumbPath));
-            string jpgPath = imagePathName + ".jpg";
-
-            string[] extensions = { ".jpeg", ".gif", ".png", ".bmp", ".webp" };
-            foreach (var ext in extensions)
+            try
             {
-                string sourceImgPath = imagePathName + ext;
-                if (File.Exists(sourceImgPath))
+                string imagePathName = Path.Combine(Path.GetDirectoryName(thumbPath), Path.GetFileNameWithoutExtension(thumbPath));
+                string jpgPath = imagePathName + ".jpg";
+
+                string[] extensions = { ".jpeg", ".gif", ".png", ".bmp", ".webp" };
+                foreach (var ext in extensions)
                 {
-                    _ = await new Conversion().AddParameter($" -i \"{sourceImgPath}\" ")
-                                              .SetOutput(jpgPath)
-                                              .Start();
-                    break;
+                    string sourceImgPath = imagePathName + ext;
+                    if (File.Exists(sourceImgPath))
+                    {
+                        Console.WriteLine($"start Convert thumbnail format {ext}: {jpgPath}");
+                        IConversion conversion = new Conversion().AddParameter($" -i \"{sourceImgPath}\" ")
+                                                                 .SetOutput(jpgPath);
+                        Console.WriteLine(conversion.Build());
+                        _ = await conversion.Start();
+                        Console.WriteLine($"Finish Convert thumbnail format {ext}: {jpgPath}");
+                        break;
+                    }
+                }
+
+                if (File.Exists(jpgPath))
+                {
+                    string tempPath = Path.GetTempFileName();
+
+                    //FFmpeg method
+                    Console.WriteLine($"Start Embed thumbnail: {filePath}");
+                    IConversion conversion = new Conversion().AddParameter($" -i \"{filePath}\" -y -codec copy", ParameterPosition.PreInput)
+                                                             .AddParameter($" -attach \"{jpgPath}\" -map 0 -metadata:s:t:0 mimetype=image/jpeg -metadata:s:t:0 filename=cover.jpg ", ParameterPosition.PreInput)
+                                                             .SetOutputFormat(Format.matroska)
+                                                             .SetOutput(tempPath);
+                    Console.WriteLine(conversion.Build());
+                    _ = await conversion.Start();
+
+                    ////AtomicParsley method(Only works with mp3/ mp4 / m4a)
+                    ////Not tested.
+                    //using (System.Diagnostics.Process proc = new())
+                    //{
+                    //    proc.StartInfo.RedirectStandardError = proc.StartInfo.RedirectStandardOutput = true;
+                    //    proc.StartInfo.FileName = "AtomicParsley";
+                    //    proc.StartInfo.Arguments = $"{newPath} --artwork {jpgPath} -o {tempPath}";
+                    //    _ = proc.Start();
+                    //    proc.WaitForExit();
+                    //}
+
+                    File.Delete(filePath);
+                    File.Move(tempPath, filePath);
+                    Console.WriteLine($"Finish Embed thumbnail: {filePath}");
                 }
             }
-
-            if (File.Exists(jpgPath))
-            {
-                var tempPath = Path.GetTempFileName();
-
-                //FFmpeg method
-                IConversion conversion = new Conversion().AddParameter($" -i \"{filePath}\" -y -codec copy", ParameterPosition.PreInput)
-                                                         .AddParameter($" -attach \"{jpgPath}\" -map 0 -metadata:s:t:0 mimetype=image/jpeg -metadata:s:t:0 filename=cover.jpg ", ParameterPosition.PreInput)
-                                                         .SetOutputFormat(Format.matroska)
-                                                         .SetOutput(tempPath);
-                //Console.WriteLine(conversion.Build());
-                IConversionResult convRes = await conversion.Start();
-
-                ////AtomicParsley method(Only works with mp3/ mp4 / m4a)
-                ////Not tested.
-                //using (System.Diagnostics.Process proc = new())
-                //{
-                //    proc.StartInfo.RedirectStandardError = proc.StartInfo.RedirectStandardOutput = true;
-                //    proc.StartInfo.FileName = "AtomicParsley";
-                //    proc.StartInfo.Arguments = $"{newPath} --artwork {jpgPath} -o {tempPath}";
-                //    _ = proc.Start();
-                //    proc.WaitForExit();
-                //}
-
-                File.Delete(filePath);
-                File.Move(tempPath, filePath);
-            }
+            catch (AggregateException) { Console.WriteLine("Xabe.FFmpeg is dead in AddThumbNailImage"); }
         }
 
         /// <summary>
@@ -268,24 +333,30 @@ namespace backup_dl
         /// <returns></returns>
         private static async Task AddMetaData(string filePath, VideoData video)
         {
-            if (null == video) return;
+            try
+            {
+                if (null == video) return;
 
-            // 加MetaData
-            string title = video.Title;
-            string artist = video.Uploader;
-            DateTime date = video.UploadDate ?? DateTime.Now;
-            string description = video.Description;
+                // 加MetaData
+                string title = video.Title;
+                string artist = video.Uploader;
+                DateTime date = video.UploadDate ?? DateTime.Now;
+                string description = video.Description;
 
-            var tempPath = Path.GetTempFileName();
-            IConversion conversion = new Conversion().AddParameter($"-i \"{filePath}\" -y -codec copy -map 0", ParameterPosition.PreInput)
-                                                     .AddParameter($"-metadata title=\"{title}\" -metadata artist=\"{artist}\" -metadata date=\"{date:u}\" -metadata description=\"{description}\" -metadata comment=\"{description}\"", ParameterPosition.PreInput)
-                                                     .SetOutputFormat(Format.matroska)
-                                                     .SetOutput(tempPath);
-            //Console.WriteLine(conversion.Build());
-            IConversionResult convRes = await conversion.Start();
+                var tempPath = Path.GetTempFileName();
+                Console.WriteLine($"Start Add matadata: {filePath}");
+                IConversion conversion = new Conversion().AddParameter($"-i \"{filePath}\" -y -codec copy -map 0", ParameterPosition.PreInput)
+                                                         .AddParameter($"-metadata title=\"{title}\" -metadata artist=\"{artist}\" -metadata date=\"{date:u}\" -metadata description=\"{description}\" -metadata comment=\"{description}\"", ParameterPosition.PreInput)
+                                                         .SetOutputFormat(Format.matroska)
+                                                         .SetOutput(tempPath);
+                Console.WriteLine(conversion.Build());
+                _ = await conversion.Start();
 
-            File.Delete(filePath);
-            File.Move(tempPath, filePath);
+                File.Delete(filePath);
+                File.Move(tempPath, filePath);
+                Console.WriteLine($"Finish Add matadata: {filePath}");
+            }
+            catch (AggregateException) { Console.WriteLine("Xabe.FFmpeg is dead in AddMetaData"); }
         }
 
         // https://weblog.west-wind.com/posts/2010/Dec/20/Finding-a-Relative-Path-in-NET
@@ -295,8 +366,8 @@ namespace backup_dl
             if (!basePath.EndsWith("\\"))
                 basePath += "\\";
 
-            Uri baseUri = new Uri(basePath);
-            Uri fullUri = new Uri(fullPath);
+            Uri baseUri = new(basePath);
+            Uri fullUri = new(fullPath);
 
             Uri relativeUri = baseUri.MakeRelativeUri(fullUri);
 

@@ -5,7 +5,7 @@ WORKDIR /app
 ENV AZURE_STORAGE_CONNECTION_STRING_VTUBER="ChangeThis"
 ENV CHANNELS_IN_ARRAY="[\"https://www.youtube.com/channel/UCBC7vYFNQoGPupe5NxPG4Bw\"]"
 ENV Max_Download="10"
-RUN apt-get update \
+RUN apt-get update && apt-get upgrade -y \
         && apt-get -y install software-properties-common \
         && apt-get update \
         && apt-get -y install python-pip aria2 ffmpeg \
