@@ -34,6 +34,7 @@ namespace backup_dl
             string tempDir = Path.Combine(Path.GetTempPath(), "backup-dl");
             _ = Directory.CreateDirectory(tempDir);
             string archivePath = Path.Combine(tempDir, "archive.txt");
+            string newArchivePath = Path.Combine(tempDir, "archive_new.txt");
 
             try
             {
@@ -42,6 +43,7 @@ namespace backup_dl
                 if (archiveBlob.Exists())
                 {
                     _ = archiveBlob.DownloadTo(archivePath);
+                    File.Copy(archivePath, newArchivePath);
                 }
 
                 OptionSet optionSet = new()
@@ -54,7 +56,7 @@ namespace backup_dl
                     MergeOutputFormat = DownloadMergeFormat.Mkv,
                     NoCheckCertificate = true,
                     Output = Path.Combine(tempDir, "%(channel_id)s/%(id)s.%(ext)s"),
-                    DownloadArchive = archivePath,
+                    DownloadArchive = newArchivePath,
                     ExternalDownloader = "aria2c",
                     ExternalDownloaderArgs = "-j 16 -s 16 -x 16 -k 1M --retry-wait 10 --max-tries 10 --enable-color=false",
                     NoResizeBuffer = true,
@@ -92,7 +94,6 @@ namespace backup_dl
                         optionSet,
                         new CancellationToken()).Wait();
 
-                    // 加封面圖和影片資訊
                     List<string> files = Directory.EnumerateFiles(tempDir, "*.mkv", SearchOption.AllDirectories).ToList();
                     YoutubeDL ytdl = new();
                     ytdl.YoutubeDLPath = ytdlPath;
@@ -104,7 +105,7 @@ namespace backup_dl
                         CancellationTokenSource cancel = new();
 
                         fileNames.Add(id);
-                        Task<string> task = ytdl.RunVideoDataFetch($"https://www.youtube.com/watch?v={id}")
+                        Task task = ytdl.RunVideoDataFetch($"https://www.youtube.com/watch?v={id}")
                             .ContinueWith((res) =>
                             {
                                 if (!res.IsCompletedSuccessfully) cancel.Cancel();
@@ -133,34 +134,30 @@ namespace backup_dl
                                 string newPath = res.Result;
                                 Task<bool> task = UploadToAzure(containerClient, tempDir, newPath);
                                 task.Wait();
-                                return task.Result ? null : id;
+                                return task.Result;
+                            })
+                            .ContinueWith((res) =>
+                            {
+                                bool success = res.Result;
+                                if (success)
+                                    File.AppendAllText(archivePath, "youtube " + id + Environment.NewLine);
+                                else
+                                    Console.WriteLine($"Excute Failed: {id}");
+                                return success;
+                            })
+                            .ContinueWith((res) =>
+                            {
+                                if (res.IsCompletedSuccessfully && res.Result)
+                                {
+                                    UploadToAzure(containerClient, tempDir, archivePath, ContentType: "text/plain").Wait();
+                                }
                             }, TaskContinuationOptions.ExecuteSynchronously);
+
                         tasks.Add(task);
                     }
                 }
 
-                await Task.Factory.ContinueWhenAll(
-                    tasks.ToArray(),
-                    (tasks) =>
-                    {
-                        List<string> faildIds = new();
-                        // 移除上傳失敗項
-                        foreach (Task<string> task in tasks)
-                        {
-                            if (task.IsCompleted && !string.IsNullOrEmpty(task.Result))
-                            {
-                                faildIds.Add("youtube " + task.Result);
-                                Console.WriteLine($"Excute Failed: {task.Result}");
-                            }
-                        }
-                        File.WriteAllLines(archivePath,
-                                           File.ReadLines(archivePath)
-                                               .Where(l => !faildIds.Contains(l))
-                                               .ToList());
-
-                        // 上傳完成清單
-                        UploadToAzure(containerClient, tempDir, archivePath, ContentType: "text/plain").Wait();
-                    });
+                Task.WaitAll(tasks.ToArray());
             }
             finally
             {
@@ -199,7 +196,7 @@ namespace backup_dl
             }
             catch (Exception e)
             {
-                if (e is RequestFailedException || e is TaskCanceledException)
+                if (e is RequestFailedException or TaskCanceledException)
                 {
                     if (retry)
                     {
@@ -214,20 +211,6 @@ namespace backup_dl
                 }
                 else { throw; }
             }
-        }
-
-        /// <summary>
-        /// 轉成mp4
-        /// </summary>
-        /// <param name="filePath"></param>
-        /// <returns></returns>
-        private static async Task<string> ConvertToMp4Async(string filePath)
-        {
-            string id = Path.GetFileNameWithoutExtension(filePath);
-            string tempPath = Path.Combine(Path.GetDirectoryName(filePath), id + ".mp4");
-            var conversion = await FFmpeg.Conversions.FromSnippet.ToMp4(filePath, tempPath);
-            _ = await conversion.Start();
-            return tempPath;
         }
 
         /// <summary>
