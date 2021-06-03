@@ -19,6 +19,8 @@ namespace backup_dl
     {
         static async Task Main(string[] args)
         {
+            DateTime startTime = DateTime.Now;
+
             // Create a BlobServiceClient object which will be used to create a container client
             string connectionString = Environment.GetEnvironmentVariable("AZURE_STORAGE_CONNECTION_STRING_VTUBER");
             BlobServiceClient blobServiceClient = new(connectionString);
@@ -34,7 +36,8 @@ namespace backup_dl
             string tempDir = Path.Combine(Path.GetTempPath(), "backup-dl");
             _ = Directory.CreateDirectory(tempDir);
             string archivePath = Path.Combine(tempDir, "archive.txt");
-            string newArchivePath = Path.Combine(tempDir, "archive_new.txt");
+            string ytdlArchivePath = Path.Combine(tempDir, "archive_ytdl.txt");
+            string oldArchivePath = Path.Combine(tempDir, "archive_old.txt");
 
             try
             {
@@ -43,7 +46,9 @@ namespace backup_dl
                 if (archiveBlob.Exists())
                 {
                     _ = archiveBlob.DownloadTo(archivePath);
-                    File.Copy(archivePath, newArchivePath);
+                    File.Copy(archivePath, ytdlArchivePath, true);
+                    File.Copy(archivePath, oldArchivePath, true);
+                    _ = UploadToAzure(containerClient, tempDir, oldArchivePath, ContentType: "text/plain");
                 }
 
                 OptionSet optionSet = new()
@@ -56,7 +61,7 @@ namespace backup_dl
                     MergeOutputFormat = DownloadMergeFormat.Mkv,
                     NoCheckCertificate = true,
                     Output = Path.Combine(tempDir, "%(channel_id)s/%(id)s.%(ext)s"),
-                    DownloadArchive = newArchivePath,
+                    DownloadArchive = ytdlArchivePath,
                     ExternalDownloader = "aria2c",
                     ExternalDownloaderArgs = "-j 16 -s 16 -x 16 -k 1M --retry-wait 10 --max-tries 10 --enable-color=false",
                     NoResizeBuffer = true,
@@ -150,6 +155,7 @@ namespace backup_dl
                                 if (res.IsCompletedSuccessfully && res.Result)
                                 {
                                     UploadToAzure(containerClient, tempDir, archivePath, ContentType: "text/plain").Wait();
+                                    Console.WriteLine($"Task done: {id}");
                                 }
                             }, TaskContinuationOptions.ExecuteSynchronously);
 
@@ -158,6 +164,7 @@ namespace backup_dl
                 }
 
                 Task.WaitAll(tasks.ToArray());
+                Console.WriteLine($"All tasks done. Total spend time: {DateTime.Now - startTime:hh\\:mm\\:ss}");
             }
             finally
             {
@@ -174,12 +181,13 @@ namespace backup_dl
         /// <returns></returns>
         private static async Task<bool> UploadToAzure(BlobContainerClient containerClient, string tempDir, string filePath, bool retry = true, string ContentType = "video/x-matroska")
         {
+            bool isVideo = ContentType == "video/x-matroska";
             try
             {
                 using (FileStream fs = new(filePath, FileMode.Open, FileAccess.Read))
                 {
                     Console.WriteLine($"Start Upload {filePath} to azure storage");
-                    AccessTier accessTire = (ContentType == "video/x-matroska")
+                    AccessTier accessTire = isVideo
                                             ? AccessTier.Archive
                                             : AccessTier.Hot;
 
@@ -190,7 +198,8 @@ namespace backup_dl
                                      httpHeaders: new BlobHttpHeaders { ContentType = ContentType },
                                      accessTier: accessTire);
                     Console.WriteLine($"Finish Upload {filePath} to azure storage");
-                    File.Delete(filePath);
+
+                    if (isVideo) File.Delete(filePath);
                     return true;
                 }
             }
