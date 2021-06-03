@@ -182,10 +182,16 @@ namespace backup_dl
                 using (FileStream fs = new(filePath, FileMode.Open, FileAccess.Read))
                 {
                     Console.WriteLine($"Start Upload {filePath} to azure storage");
+                    AccessTier accessTire = (ContentType == "video/x-matroska")
+                                            ? AccessTier.Archive
+                                            : AccessTier.Hot;
+
                     // 覆寫
                     _ = await containerClient
                         .GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}")
-                        .UploadAsync(fs, new BlobHttpHeaders { ContentType = ContentType });
+                        .UploadAsync(content: fs,
+                                     httpHeaders: new BlobHttpHeaders { ContentType = ContentType },
+                                     accessTier: accessTire);
                     Console.WriteLine($"Finish Upload {filePath} to azure storage");
                     File.Delete(filePath);
                     return true;
