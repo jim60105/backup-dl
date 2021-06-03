@@ -384,6 +384,7 @@ namespace backup_dl
         }
 
         // https://weblog.west-wind.com/posts/2010/Dec/20/Finding-a-Relative-Path-in-NET
+        // https://stackoverflow.com/q/5706555/8706033
         private static string GetRelativePath(string fullPath, string basePath)
         {
             // Require trailing backslash for path
@@ -396,7 +397,7 @@ namespace backup_dl
             Uri relativeUri = baseUri.MakeRelativeUri(fullUri);
 
             // Uri's use forward slashes so convert back to backward slashes
-            return relativeUri.ToString().Replace("/", "\\");
+            return Uri.UnescapeDataString(relativeUri.ToString()).Replace("/", "\\");
         }
     }
 }
