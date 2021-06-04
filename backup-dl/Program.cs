@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
@@ -19,6 +20,10 @@ namespace backup_dl
     class Program
     {
         private static ILogger logger;
+        private static BlobContainerClient containerClient;
+
+        public static string YtdlPath { get; set; } = "/usr/local/bin/youtube-dl";
+
         static void Main(string[] args)
         {
             // 建立Logger
@@ -33,11 +38,10 @@ namespace backup_dl
             logger.Debug("Start backup-dl {now}", startTime.ToString());
 
             // Create a BlobServiceClient object which will be used to create a container client
+            // Get the container and return a container client object
             string connectionString = Environment.GetEnvironmentVariable("AZURE_STORAGE_CONNECTION_STRING_VTUBER");
             BlobServiceClient blobServiceClient = new(connectionString);
-
-            // Get the container and return a container client object
-            BlobContainerClient containerClient = blobServiceClient.GetBlobContainerClient("vtuber");
+            containerClient = blobServiceClient.GetBlobContainerClient("vtuber");
 
             // 取得要下載的連結
             string channelsToDownload = Environment.GetEnvironmentVariable("CHANNELS_IN_ARRAY");
@@ -59,7 +63,7 @@ namespace backup_dl
                     _ = archiveBlob.DownloadTo(archivePath);
                     File.Copy(archivePath, ytdlArchivePath, true);
                     File.Copy(archivePath, oldArchivePath, true);
-                    _ = UploadToAzure(containerClient, tempDir, oldArchivePath, ContentType: "text/plain");
+                    _ = UploadToAzure(tempDir, oldArchivePath, ContentType: "text/plain");
                 }
 
                 OptionSet optionSet = new()
@@ -86,6 +90,8 @@ namespace backup_dl
                 };
 
                 // 最大下載數
+                // 每次只下載一個檔案，跑{maxDownload}次
+                // 或者不限制數量，跑一次到完 (就無法非同步上傳)
                 if (int.TryParse(Environment.GetEnvironmentVariable("Max_Download"), out int maxDownload))
                 {
                     optionSet.MaxDownloads = 1;
@@ -95,14 +101,21 @@ namespace backup_dl
                     maxDownload = 1;
                 }
 
-                // 下載
-                string ytdlPath = "/usr/local/bin/youtube-dl";
-                YoutubeDLProcess ytdlProc = new(ytdlPath);
+                YoutubeDLProcess ytdlProc = new(YtdlPath);
                 ytdlProc.OutputReceived += (o, e) => logger.Debug(e.Data);
                 ytdlProc.ErrorReceived += (o, e) => logger.Error(e.Data);
 
+                List<string> ProcessedIds = new();
                 List<Task> tasks = new();
-                List<string> fileNames = new();
+
+                // 在執行前呼叫，處理上次未上傳完成的檔案
+                tasks = PostProcess(tempDir, ref ProcessedIds);
+                File.WriteAllLines(
+                    ytdlArchivePath,
+                    File.ReadAllLines(ytdlArchivePath)
+                        .ToList()
+                        .Concat(ProcessedIds.Select(id=>"youtube " + id + Environment.NewLine)));
+
                 for (int i = 0; i < maxDownload; i++)
                 {
                     ytdlProc.RunAsync(
@@ -110,68 +123,7 @@ namespace backup_dl
                         optionSet,
                         new CancellationToken()).Wait();
 
-                    List<string> files = Directory.EnumerateFiles(tempDir, "*.mkv", SearchOption.AllDirectories).ToList();
-                    YoutubeDL ytdl = new();
-                    ytdl.YoutubeDLPath = ytdlPath;
-                    foreach (string filePath in files)
-                    {
-                        string id = Path.GetFileNameWithoutExtension(filePath);
-                        if (fileNames.Contains(id)) continue;
-
-                        CancellationTokenSource cancel = new();
-
-                        fileNames.Add(id);
-                        Task task = ytdl.RunVideoDataFetch($"https://www.youtube.com/watch?v={id}")
-                            .ContinueWith((res) =>
-                            {
-                                if (!res.IsCompletedSuccessfully) cancel.Cancel();
-
-                                VideoData videoData = res.IsCompletedSuccessfully ? res.Result.Data : null;
-                                string newPath = CalculatePath(filePath, videoData?.Title, videoData?.UploadDate);
-                                fileNames.Add(Path.GetFileNameWithoutExtension(newPath));
-                                return (newPath, videoData);
-                            }, cancel.Token)
-                            .ContinueWith((res) =>
-                            {
-                                if (!res.IsCompletedSuccessfully) cancel.Cancel();
-
-                                (string newPath, VideoData videoData) = res.Result;
-                                AddMetaData(newPath, videoData).Wait();
-                                return newPath;
-                            }, cancel.Token)
-                            .ContinueWith((res) =>
-                            {
-                                string newPath = res.Result;
-                                AddThumbNailImage(filePath, newPath).Wait();
-                                return newPath;
-                            })
-                            .ContinueWith((res) =>
-                            {
-                                string newPath = res.Result;
-                                Task<bool> task = UploadToAzure(containerClient, tempDir, newPath);
-                                task.Wait();
-                                return task.Result;
-                            })
-                            .ContinueWith((res) =>
-                            {
-                                bool success = res.Result;
-                                if (success)
-                                    File.AppendAllText(archivePath, "youtube " + id + Environment.NewLine);
-                                else
-                                    logger.Debug("Excute Failed: {id}", id);
-                                return success;
-                            })
-                            .ContinueWith((res) =>
-                            {
-                                if (res.IsCompletedSuccessfully && res.Result)
-                                {
-                                    UploadToAzure(containerClient, tempDir, archivePath, ContentType: "text/plain").Wait();
-                                    logger.Debug("Task done: {id}", id);
-                                }
-                            }, TaskContinuationOptions.ExecuteSynchronously);
-
-                        tasks.Add(task);
-                    }
+                    tasks = tasks.Concat(PostProcess(tempDir, ref ProcessedIds)).ToList();
                 }
 
                 Task.WaitAll(tasks.ToArray());
@@ -185,13 +137,106 @@ namespace backup_dl
         }
 
         /// <summary>
+        /// 影片下載後處理 (重命名、加封面、加metadata、上傳)
+        /// </summary>
+        /// <param name="tempDir"></param>
+        /// <param name="ProcessedIds">已處理中的id清單</param>
+        /// <returns></returns>
+        private static List<Task> PostProcess(string tempDir, ref List<string> ProcessedIds)
+        {
+            List<string> files = Directory.EnumerateFiles(tempDir, "*.mkv", SearchOption.AllDirectories).ToList();
+            List<Task> tasks = new();
+
+            foreach (string filePath in files)
+            {
+                // 剛由ytdl下載完的檔案，檔名為 {id}
+                // 處理完成的檔案，檔名為 {date:yyyyMMdd} {title} ({id}).mkv)}
+                // 此處比對在()中的id
+                Match match = Regex.Match(Path.GetFileNameWithoutExtension(filePath), @"\s\((.*)\)$");
+                string id = match.Success
+                    ? match.Groups[1].Value
+                    : Path.GetFileNameWithoutExtension(filePath);
+
+                if (ProcessedIds.Contains(id)) continue;
+                ProcessedIds.Add(id);
+
+                Task<string> task;
+                Task finalTask;
+
+                string archivePath = Path.Combine(tempDir, "archive.txt");
+
+                // 如果檔名比對成功，則為運算完成的檔案，直接跳到上傳
+                // 這會在上傳中斷，重新啟動時發生
+                if (match.Success)
+                {
+                    task = Task.Factory.StartNew(() => filePath);
+                }
+                else
+                {
+                    CancellationTokenSource cancel = new();
+                    task = new YoutubeDL() { YoutubeDLPath = YtdlPath }
+                        .RunVideoDataFetch($"https://www.youtube.com/watch?v={id}")
+                        .ContinueWith((res) =>
+                        {
+                            if (!res.IsCompletedSuccessfully) cancel.Cancel();
+
+                            VideoData videoData = res.IsCompletedSuccessfully ? res.Result.Data : null;
+                            string newPath = CalculatePath(filePath, videoData?.Title, videoData?.UploadDate);
+                            return (newPath, videoData);
+                        }, cancel.Token)
+                        .ContinueWith((res) =>
+                        {
+                            if (!res.IsCompletedSuccessfully) cancel.Cancel();
+
+                            (string newPath, VideoData videoData) = res.Result;
+                            AddMetaData(newPath, videoData).Wait();
+                            return newPath;
+                        }, cancel.Token)
+                        .ContinueWith((res) =>
+                        {
+                            string newPath = res.Result;
+                            AddThumbNailImage(filePath, newPath).Wait();
+                            return newPath;
+                        });
+                }
+                finalTask = task.ContinueWith((res) =>
+                    {
+                        string newPath = res.Result;
+                        Task<bool> task = UploadToAzure(tempDir, newPath);
+                        task.Wait();
+                        return task.Result;
+                    })
+                    .ContinueWith((res) =>
+                    {
+                        bool success = res.Result;
+                        if (success)
+                            File.AppendAllText(archivePath, "youtube " + id + Environment.NewLine);
+                        else
+                            logger.Debug("Excute Failed: {id}", id);
+                        return success;
+                    })
+                    .ContinueWith((res) =>
+                    {
+                        if (res.IsCompletedSuccessfully && res.Result)
+                        {
+                            UploadToAzure(tempDir, archivePath, ContentType: "text/plain").Wait();
+                            logger.Debug("Task done: {id}", id);
+                        }
+                    }, TaskContinuationOptions.ExecuteSynchronously);
+
+                tasks.Add(finalTask);
+            }
+            return tasks;
+        }
+
+        /// <summary>
         /// 上傳檔案至Azure Blob Storage
         /// </summary>
         /// <param name="containerClient"></param>
         /// <param name="tempDir">用來計算Storage內路徑的基準路徑</param>
         /// <param name="filePath">上傳檔案路徑</param>
         /// <returns></returns>
-        private static async Task<bool> UploadToAzure(BlobContainerClient containerClient, string tempDir, string filePath, bool retry = true, string ContentType = "video/x-matroska")
+        private static async Task<bool> UploadToAzure(string tempDir, string filePath, bool retry = true, string ContentType = "video/x-matroska")
         {
             bool isVideo = ContentType == "video/x-matroska";
             try
@@ -222,7 +267,7 @@ namespace backup_dl
                     if (retry)
                     {
                         // Retry Once
-                        return await UploadToAzure(containerClient, tempDir, filePath, false);
+                        return await UploadToAzure(tempDir, filePath, false);
                     }
                     else
                     {
