@@ -69,8 +69,7 @@ namespace backup_dl
                 OptionSet optionSet = new()
                 {
                     IgnoreConfig = true,
-                    // 非DASH的最佳品質
-                    Format = "bestvideo+bestaudio/best",
+                    Format = Environment.GetEnvironmentVariable("FORMAT") ?? "bestvideo+bestaudio/best",
                     YoutubeSkipDashManifest = true,
                     IgnoreErrors = true,
                     MergeOutputFormat = DownloadMergeFormat.Mkv,
@@ -115,7 +114,7 @@ namespace backup_dl
                     ytdlArchivePath,
                     File.ReadAllLines(ytdlArchivePath)
                         .ToList()
-                        .Concat(ProcessedIds.Select(id=>"youtube " + id + Environment.NewLine)));
+                        .Concat(ProcessedIds.Select(id => "youtube " + id + Environment.NewLine)));
 
                 for (int i = 0; i < maxDownload; i++)
                 {
@@ -263,7 +262,8 @@ namespace backup_dl
                         .UploadAsync(content: fs,
                                      httpHeaders: new BlobHttpHeaders { ContentType = ContentType },
                                      accessTier: accessTire,
-                                     progressHandler: new Progress<long>(progress=> {
+                                     progressHandler: new Progress<long>(progress =>
+                                     {
                                          logger.Verbose("Uploading...{progress}% {path}", Math.Round(((double)progress) / fileSize * 100), filePath);
                                      }));
                     logger.Debug("Finish Upload {path} to azure storage", filePath);
