@@ -35,7 +35,7 @@ namespace backup_dl
 
             // 計時
             DateTime startTime = DateTime.Now;
-            logger.Debug("Start backup-dl {now}", startTime.ToString());
+            logger.Information("Start backup-dl {now}", startTime.ToString());
 
             // Create a BlobServiceClient object which will be used to create a container client
             // Get the container and return a container client object
@@ -81,8 +81,8 @@ namespace backup_dl
                     ExternalDownloaderArgs = "-j 16 -s 16 -x 16 -k 1M --retry-wait 10 --max-tries 10 --enable-color=false",
                     NoResizeBuffer = true,
                     WriteThumbnail = true,
-                    NoColor = true,
-                    WriteInfoJson = true
+                    NoColor = true
+                    //WriteInfoJson = true,
 
                     //這兩個會在merge結束前就執行，必定造成失敗
                     //EmbedThumbnail = true,
@@ -102,7 +102,7 @@ namespace backup_dl
                 }
 
                 YoutubeDLProcess ytdlProc = new(YtdlPath);
-                ytdlProc.OutputReceived += (o, e) => logger.Debug(e.Data);
+                ytdlProc.OutputReceived += (o, e) => logger.Verbose(e.Data);
                 ytdlProc.ErrorReceived += (o, e) => logger.Error(e.Data);
 
                 List<string> ProcessedIds = new();
@@ -196,12 +196,14 @@ namespace backup_dl
                         {
                             string newPath = res.Result;
                             AddThumbNailImage(filePath, newPath).Wait();
+                            logger.Information("PostProcess Finish: {path}", res.Result);
                             return newPath;
                         });
                 }
                 finalTask = task.ContinueWith((res) =>
                     {
                         string newPath = res.Result;
+                        logger.Information("Start Uploading: {path}", res.Result);
                         Task<bool> task = UploadToAzure(tempDir, newPath);
                         task.Wait();
                         return task.Result;
@@ -220,7 +222,7 @@ namespace backup_dl
                         if (res.IsCompletedSuccessfully && res.Result)
                         {
                             UploadToAzure(tempDir, archivePath, ContentType: "text/plain").Wait();
-                            logger.Debug("Task done: {id}", id);
+                            logger.Information("Task done: {path}", res.Result);
                         }
                     }, TaskContinuationOptions.ExecuteSynchronously);
 
@@ -243,7 +245,7 @@ namespace backup_dl
             {
                 using (FileStream fs = new(filePath, FileMode.Open, FileAccess.Read))
                 {
-                    logger.Debug("Start Upload {filePath} to azure storage", filePath);
+                    logger.Debug("Start Upload {path} to azure storage", filePath);
                     AccessTier accessTire = isVideo
                                             ? AccessTier.Archive
                                             : AccessTier.Hot;
@@ -254,7 +256,7 @@ namespace backup_dl
                         .UploadAsync(content: fs,
                                      httpHeaders: new BlobHttpHeaders { ContentType = ContentType },
                                      accessTier: accessTire);
-                    logger.Debug("Finish Upload {filePath} to azure storage", filePath);
+                    logger.Debug("Finish Upload {path} to azure storage", filePath);
 
                     if (isVideo) File.Delete(filePath);
                     return true;
@@ -367,7 +369,7 @@ namespace backup_dl
                     string tempPath = Path.GetTempFileName();
 
                     //FFmpeg method
-                    logger.Debug("Start Embed thumbnail: {filePath}", filePath);
+                    logger.Debug("Start Embed thumbnail: {path}", filePath);
                     IConversion conversion = new Conversion().AddParameter($" -i \"{filePath}\" -y -codec copy", ParameterPosition.PreInput)
                                                              .AddParameter($" -attach \"{jpgPath}\" -map 0 -metadata:s:t:0 mimetype=image/jpeg -metadata:s:t:0 filename=cover.jpg ", ParameterPosition.PreInput)
                                                              .SetOutputFormat(Format.matroska)
@@ -388,7 +390,7 @@ namespace backup_dl
 
                     File.Delete(filePath);
                     File.Move(tempPath, filePath);
-                    logger.Debug("Finish Embed thumbnail: {filePath}", filePath);
+                    logger.Debug("Finish Embed thumbnail: {path}", filePath);
                 }
             }
             catch (InvalidOperationException) { logger.Error("Xabe.FFmpeg is dead in AddThumbNailImage"); }
@@ -413,7 +415,7 @@ namespace backup_dl
                 string description = video.Description;
 
                 var tempPath = Path.GetTempFileName();
-                logger.Debug("Start Add matadata: {filePath}", filePath);
+                logger.Debug("Start Add matadata: {path}", filePath);
                 IConversion conversion = new Conversion().AddParameter($"-i \"{filePath}\" -y -codec copy -map 0", ParameterPosition.PreInput)
                                                          .AddParameter($"-metadata title=\"{title}\" -metadata artist=\"{artist}\" -metadata date=\"{date:u}\" -metadata description=\"{description}\" -metadata comment=\"{description}\"", ParameterPosition.PreInput)
                                                          .SetOutputFormat(Format.matroska)
@@ -423,7 +425,7 @@ namespace backup_dl
 
                 File.Delete(filePath);
                 File.Move(tempPath, filePath);
-                logger.Debug("Finish Add matadata: {filePath}", filePath);
+                logger.Debug("Finish Add matadata: {path}", filePath);
             }
             catch (InvalidOperationException) { logger.Error("Xabe.FFmpeg is dead in AddMetaData"); }
         }
