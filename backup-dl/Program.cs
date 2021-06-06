@@ -81,7 +81,8 @@ namespace backup_dl
                     ExternalDownloaderArgs = "-j 16 -s 16 -x 16 -k 1M --retry-wait 10 --max-tries 10 --enable-color=false",
                     NoResizeBuffer = true,
                     WriteThumbnail = true,
-                    NoColor = true
+                    NoColor = true,
+                    DateBefore = DateTime.Now.AddDays(-2)
                     //WriteInfoJson = true,
 
                     //這兩個會在merge結束前就執行，必定造成失敗
