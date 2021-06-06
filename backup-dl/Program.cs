@@ -92,7 +92,7 @@ namespace backup_dl
                 // 最大下載數
                 // 每次只下載一個檔案，跑{maxDownload}次
                 // 或者不限制數量，跑一次到完 (就無法非同步上傳)
-                if (int.TryParse(Environment.GetEnvironmentVariable("Max_Download"), out int maxDownload))
+                if (int.TryParse(Environment.GetEnvironmentVariable("MAX_DOWNLOAD"), out int maxDownload))
                 {
                     optionSet.MaxDownloads = 1;
                 }

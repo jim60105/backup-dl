@@ -9,4 +9,4 @@
 <https://docs.microsoft.com/zh-tw/azure/storage/common/storage-account-keys-manage?toc=%2Fazure%2Fstorage%2Fblobs%2Ftoc.json&tabs=azure-portal#view-account-access-keys>
 - docker run
 
-        docker run --rm --env CHANNELS_IN_ARRAY="[\"https://www.youtube.com/channel/UCBC7vYFNQoGPupe5NxPG4Bw\", \"https://www.youtube.com/channel/UC7XCjKxBEct0uAukpQXNFPw\", \"https://www.youtube.com/channel/UCuy-kZJ7HWwUU-eKv0zUZFQ\"]" --env AZURE_STORAGE_CONNECTION_STRING_VTUBER --env Max_Download="10" jim60105/backup-dl
+        docker run --rm --env CHANNELS_IN_ARRAY="[\"https://www.youtube.com/channel/UCBC7vYFNQoGPupe5NxPG4Bw\", \"https://www.youtube.com/channel/UC7XCjKxBEct0uAukpQXNFPw\", \"https://www.youtube.com/channel/UCuy-kZJ7HWwUU-eKv0zUZFQ\"]" --env AZURE_STORAGE_CONNECTION_STRING_VTUBER --env MAX_DOWNLOAD="10" jim60105/backup-dl
