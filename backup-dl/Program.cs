@@ -156,6 +156,7 @@ namespace backup_dl
                 string id = match.Success
                     ? match.Groups[1].Value
                     : Path.GetFileNameWithoutExtension(filePath);
+                string title = id;
 
                 if (ProcessedIds.Contains(id)) continue;
                 ProcessedIds.Add(id);
@@ -178,9 +179,17 @@ namespace backup_dl
                         .RunVideoDataFetch($"https://www.youtube.com/watch?v={id}")
                         .ContinueWith((res) =>
                         {
-                            if (!res.IsCompletedSuccessfully) cancel.Cancel();
-
-                            VideoData videoData = res.IsCompletedSuccessfully ? res.Result.Data : null;
+                            VideoData videoData = null;
+                            if (res.IsCompletedSuccessfully)
+                            {
+                                videoData = res.Result.Data;
+                                title = videoData?.Title;
+                            }
+                            else
+                            {
+                                cancel.Cancel();
+                                videoData = null;
+                            }
                             string newPath = CalculatePath(filePath, videoData?.Title, videoData?.UploadDate);
                             return (newPath, videoData);
                         }, cancel.Token)
@@ -206,24 +215,19 @@ namespace backup_dl
                         logger.Information("Start Uploading: {path}", res.Result);
                         Task<bool> task = UploadToAzure(tempDir, newPath);
                         task.Wait();
-                        return task.Result;
+                        return task.IsCompletedSuccessfully ? newPath : null;
                     })
                     .ContinueWith((res) =>
                     {
-                        bool success = res.Result;
-                        if (success)
-                            File.AppendAllText(archivePath, "youtube " + id + Environment.NewLine);
-                        else
-                            logger.Debug("Excute Failed: {id}", id);
-                        return success;
-                    })
-                    .ContinueWith((res) =>
-                    {
-                        if (res.IsCompletedSuccessfully && res.Result)
+                        string newPath = res.Result;
+                        if (!string.IsNullOrEmpty(newPath))
                         {
+                            File.AppendAllText(archivePath, "youtube " + id + Environment.NewLine);
                             UploadToAzure(tempDir, archivePath, ContentType: "text/plain").Wait();
                             logger.Information("Task done: {path}", res.Result);
                         }
+                        else logger.Error("Excute Failed: {id}", id);
+                        return newPath;
                     }, TaskContinuationOptions.ExecuteSynchronously);
 
                 tasks.Add(finalTask);
