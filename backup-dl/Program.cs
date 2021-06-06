@@ -254,12 +254,17 @@ namespace backup_dl
                                             ? AccessTier.Archive
                                             : AccessTier.Hot;
 
+                    long fileSize = new FileInfo(filePath).Length;
+
                     // 覆寫
                     _ = await containerClient
                         .GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}")
                         .UploadAsync(content: fs,
                                      httpHeaders: new BlobHttpHeaders { ContentType = ContentType },
-                                     accessTier: accessTire);
+                                     accessTier: accessTire,
+                                     progressHandler: new Progress<long>(progress=> {
+                                         logger.Verbose("Uploading...{progress}% {path}", progress / fileSize * 100, filePath);
+                                     }));
                     logger.Debug("Finish Upload {path} to azure storage", filePath);
 
                     if (isVideo) File.Delete(filePath);
