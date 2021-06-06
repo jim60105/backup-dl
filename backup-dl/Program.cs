@@ -28,7 +28,7 @@ namespace backup_dl
         {
             // 建立Logger
             Log.Logger = new LoggerConfiguration()
-                            .MinimumLevel.Debug()
+                            .MinimumLevel.Verbose()
                             .WriteTo.Console()
                             .CreateLogger();
             logger = Log.Logger;
@@ -263,7 +263,7 @@ namespace backup_dl
                                      httpHeaders: new BlobHttpHeaders { ContentType = ContentType },
                                      accessTier: accessTire,
                                      progressHandler: new Progress<long>(progress=> {
-                                         logger.Verbose("Uploading...{progress}% {path}", progress / fileSize * 100, filePath);
+                                         logger.Verbose("Uploading...{progress}% {path}", Math.Round(((double)progress) / fileSize * 100), filePath);
                                      }));
                     logger.Debug("Finish Upload {path} to azure storage", filePath);
 
