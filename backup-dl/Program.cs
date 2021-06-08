@@ -82,7 +82,8 @@ namespace backup_dl
                     NoResizeBuffer = true,
                     WriteThumbnail = true,
                     NoColor = true,
-                    DateBefore = DateTime.Now.AddDays(-2)
+                    DateBefore = DateTime.Now.AddDays(-2),
+                    PreferFreeFormats = true
                     //WriteInfoJson = true,
 
                     //這兩個會在merge結束前就執行，必定造成失敗
