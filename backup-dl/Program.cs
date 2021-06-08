@@ -125,8 +125,11 @@ namespace backup_dl
                         .ToList()
                         .Concat(ProcessedIds.Select(id => "youtube " + id + Environment.NewLine)));
 
+                logger.Information("Start download process.");
+                logger.Debug("MAX_DOWNLOAD: {maxDownload}", maxDownload);
                 for (int i = 0; i < maxDownload; i++)
                 {
+                    logger.Debug("Excute times: {excuteTimes}", i + 1);
                     ytdlProc.RunAsync(
                         channels,
                         optionSet,
