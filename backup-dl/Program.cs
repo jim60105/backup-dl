@@ -22,7 +22,7 @@ namespace backup_dl
         private static ILogger logger;
         private static BlobContainerClient containerClient;
 
-        public static string YtdlPath { get; set; } = "/usr/bin/youtube-dl";
+        public static string YtdlPath { get; set; } = "/usr/bin/yt-dlp";
 
         static void Main(string[] args)
         {

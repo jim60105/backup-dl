@@ -5,7 +5,8 @@ WORKDIR /app
 ENV AZURE_STORAGE_CONNECTION_STRING_VTUBER="ChangeThis"
 ENV CHANNELS_IN_ARRAY="[\"https://www.youtube.com/channel/UCBC7vYFNQoGPupe5NxPG4Bw\"]"
 ENV MAX_DOWNLOAD="10"
-RUN apk --update add --no-cache aria2 ffmpeg youtube-dl
+RUN apk --update add --no-cache aria2 ffmpeg py3-pip musl-dev gcc \ 
+	&& pip install --upgrade yt-dlp
 
 FROM mcr.microsoft.com/dotnet/sdk:5.0 AS build
 WORKDIR /src
