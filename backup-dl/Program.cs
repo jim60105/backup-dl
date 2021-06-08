@@ -23,6 +23,7 @@ namespace backup_dl
         private static BlobContainerClient containerClient;
 
         public static string YtdlPath { get; set; } = "/usr/bin/yt-dlp";
+        private static string CookiesPath { get; set; } = null;
 
         static void Main(string[] args)
         {
@@ -101,6 +102,13 @@ namespace backup_dl
                     maxDownload = 1;
                 }
 
+                // 讀出cookies.txt
+                if (File.Exists("cookies.txt"))
+                {
+                    optionSet.Cookies = CookiesPath = Path.GetFullPath("cookies.txt");
+                    logger.Information("Find cookies file.");
+                }
+
                 YoutubeDLProcess ytdlProc = new(YtdlPath);
                 ytdlProc.OutputReceived += (o, e) => logger.Verbose(e.Data);
                 ytdlProc.ErrorReceived += (o, e) => logger.Error(e.Data);
@@ -166,6 +174,13 @@ namespace backup_dl
 
                 string archivePath = Path.Combine(tempDir, "archive.txt");
 
+                OptionSet overrideOptions = new();
+                // 讀出cookies.txt
+                if (!string.IsNullOrEmpty(CookiesPath))
+                {
+                    overrideOptions.Cookies = CookiesPath;
+                }
+
                 // 如果檔名比對成功，則為運算完成的檔案，直接跳到上傳
                 // 這會在上傳中斷，重新啟動時發生
                 if (match.Success)
@@ -176,7 +191,7 @@ namespace backup_dl
                 {
                     CancellationTokenSource cancel = new();
                     task = new YoutubeDL() { YoutubeDLPath = YtdlPath }
-                        .RunVideoDataFetch($"https://www.youtube.com/watch?v={id}")
+                        .RunVideoDataFetch($"https://www.youtube.com/watch?v={id}", overrideOptions: overrideOptions)
                         .ContinueWith((res) =>
                         {
                             VideoData videoData = null;
