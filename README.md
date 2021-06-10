@@ -73,3 +73,10 @@ docker pull ghcr.io/jim60105/backup-dl:latest
         --env MAX_DOWNLOAD="10" 
         jim60105/backup-dl
 ```
+
+## LICENSE
+
+- Distribute main code with MIT License.
+- Use Xabe.FFmpeg with License Agreement under non-commercial use.
+- Use YoutubeDLSharp under BSD 3-Clause License.
+- Use yt-dlp under Unlicensed License.
