@@ -1,5 +1,11 @@
 # backup-dl
 
+![License](https://img.shields.io/github/license/jim60105/sound-buttons?style=for-the-badge)
+![.NET Core](https://img.shields.io/static/v1?style=for-the-badge&message=.NET+Core&color=512BD4&logo=.NET&logoColor=FFFFFF&label=)
+![Microsoft Azure](https://img.shields.io/static/v1?style=for-the-badge&message=Microsoft+Azure&color=0078D4&logo=Microsoft+Azure&logoColor=FFFFFF&label=)
+![Docker](https://img.shields.io/static/v1?style=for-the-badge&message=Docker&color=2496ED&logo=Docker&logoColor=FFFFFF&label=)
+![YouTube](https://img.shields.io/static/v1?style=for-the-badge&message=YouTube&color=FF0000&logo=YouTube&logoColor=FFFFFF&label=)
+
 此程式可以檢查Youtube頻道、播放清單，並備份影片至Azure Blob Storage\
 這是一支.Net Core Console Application，並包裝為Linux Container\
 整合入我的「Youtube錄影伺服器 (Docker Compose)」，可搭配使用
