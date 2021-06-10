@@ -9,7 +9,7 @@
 ## 下載
 
 ``` bash
-docker pull ghcr.io/jim60105/backup-dl/backup-dl:latest
+docker pull ghcr.io/jim60105/backup-dl:latest
 ```
 
 ## 參數
@@ -68,8 +68,8 @@ docker pull ghcr.io/jim60105/backup-dl/backup-dl:latest
 
 ``` bash
     docker run 
-              --env CHANNELS_IN_ARRAY="[\"https://www.youtube.com/channel/UCBC7vYFNQoGPupe5NxPG4Bw\", \"https://www.youtube.com/channel/UC7XCjKxBEct0uAukpQXNFPw\"]" 
-              --env AZURE_STORAGE_CONNECTION_STRING_VTUBER 
-              --env MAX_DOWNLOAD="10" 
-              jim60105/backup-dl
+        --env CHANNELS_IN_ARRAY="[\"https://www.youtube.com/channel/UCBC7vYFNQoGPupe5NxPG4Bw\", \"https://www.youtube.com/channel/UC7XCjKxBEct0uAukpQXNFPw\"]" 
+        --env AZURE_STORAGE_CONNECTION_STRING_VTUBER 
+        --env MAX_DOWNLOAD="10" 
+        jim60105/backup-dl
 ```
