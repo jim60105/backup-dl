@@ -234,7 +234,7 @@ namespace backup_dl
                         logger.Information("Start Uploading: {path}", res.Result);
                         Task<bool> task = UploadToAzure(tempDir, newPath);
                         task.Wait();
-                        return task.IsCompletedSuccessfully ? newPath : null;
+                        return task.IsCompletedSuccessfully && task.Result ? newPath : null;
                     })
                     .ContinueWith((res) =>
                     {
@@ -293,20 +293,17 @@ namespace backup_dl
             }
             catch (Exception e)
             {
-                if (e is RequestFailedException or TaskCanceledException)
+                if (retry)
                 {
-                    if (retry)
-                    {
-                        // Retry Once
-                        return await UploadToAzure(tempDir, filePath, false);
-                    }
-                    else
-                    {
-                        logger.Error("Upload Failed: {fileName}", Path.GetFileName(filePath));
-                        return false;
-                    }
+                    // Retry Once
+                    return await UploadToAzure(tempDir, filePath, false);
                 }
-                else { throw; }
+                else
+                {
+                    logger.Error("Upload Failed: {fileName}", Path.GetFileName(filePath));
+                    logger.Error("{errorMessage}", e.Message);
+                    return false;
+                }
             }
         }
 
