@@ -199,18 +199,51 @@ namespace backup_dl
                         .ContinueWith((res) =>
                         {
                             VideoData videoData = null;
-                            if (res.IsCompletedSuccessfully)
+                            if (res.IsCompletedSuccessfully && res.Result.Success)
                             {
                                 videoData = res.Result.Data;
-                                title = videoData?.Title;
                             }
-                            else
+
+                            // Aria2c會對id做處理，若取影片失敗則試著反相處理再重fetch
+                            if (null == videoData)
+                            {
+                                string _id = id.Replace('_', '-');
+                                videoData = TryAgainWithId(_id);
+                                if (null != videoData) id = _id;
+                            }
+
+                            if (null == videoData)
+                            {
+                                string _id = $"_{id}";
+                                videoData = TryAgainWithId(_id);
+                                if (null != videoData) id = _id;
+                            }
+
+                            if (null == videoData)
                             {
                                 cancel.Cancel();
                                 videoData = null;
                             }
+
+                            title = videoData?.Title;
+
                             string newPath = CalculatePath(filePath, videoData?.Title, videoData?.UploadDate);
                             return (newPath, videoData);
+
+                            VideoData TryAgainWithId(string id)
+                            {
+                                VideoData resultVideoData = null;
+                                using (Task<RunResult<VideoData>> _task = new YoutubeDL() { YoutubeDLPath = YtdlPath }
+                                    .RunVideoDataFetch($"https://www.youtube.com/watch?v={id}", overrideOptions: overrideOptions))
+                                {
+                                    _task.Wait();
+                                    if (_task.IsCompletedSuccessfully && _task.Result.Success)
+                                    {
+                                        resultVideoData = _task.Result.Data;
+                                    }
+                                }
+                                return resultVideoData;
+                            }
                         }, cancel.Token)
                         .ContinueWith((res) =>
                         {
