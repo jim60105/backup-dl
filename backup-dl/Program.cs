@@ -311,25 +311,32 @@ namespace backup_dl
                     long fileSize = new FileInfo(filePath).Length;
 
                     double percentage = 0;
+                    Dictionary<string, string> tags =
+                        (null == ID || null == duration)
+                        ? new()
+                        : new()
+                        {
+                            { "id", ID },
+                            { "duration", duration?.ToString() }
+                        };
                     // 覆寫
-                    _ = await containerClient
-                        .GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}")
-                        .UploadAsync(content: fs,
-                                     httpHeaders: new BlobHttpHeaders { ContentType = ContentType },
-                                     accessTier: accessTire,
-                                     metadata: new Dictionary<string, string>() {
-                                         {"id", ID},
-                                         {"duration", duration.ToString() }
-                                     },
-                                     progressHandler: new Progress<long>(progress =>
-                                     {
-                                         double _percentage = Math.Round(((double)progress) / fileSize * 100);
-                                         if (_percentage != percentage)
-                                         {
-                                             percentage = _percentage;
-                                             logger.Verbose("Uploading...{progress}% {path}", _percentage , filePath);
-                                         }
-                                     }));
+                    BlobClient blobClient = containerClient.GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}");
+                    _ = blobClient.SetTags(tags);
+                    _ = await blobClient.UploadAsync(
+                        content: fs,
+                        httpHeaders: new BlobHttpHeaders { ContentType = ContentType },
+                        accessTier: accessTire,
+                        metadata: tags,
+                        progressHandler: new Progress<long>(progress =>
+                        {
+                            double _percentage = Math.Round(((double)progress) / fileSize * 100);
+                            if (_percentage != percentage)
+                            {
+                                percentage = _percentage;
+                                logger.Verbose("Uploading...{progress}% {path}", _percentage, filePath);
+                            }
+                        })
+                    );
                     logger.Debug("Finish Upload {path} to azure storage", filePath);
 
                     if (isVideo) File.Delete(filePath);
