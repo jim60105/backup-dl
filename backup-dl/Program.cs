@@ -308,6 +308,7 @@ namespace backup_dl
 
                     long fileSize = new FileInfo(filePath).Length;
 
+                    double percentage = 0;
                     // 覆寫
                     _ = await containerClient
                         .GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}")
@@ -316,7 +317,12 @@ namespace backup_dl
                                      accessTier: accessTire,
                                      progressHandler: new Progress<long>(progress =>
                                      {
-                                         logger.Verbose("Uploading...{progress}% {path}", Math.Round(((double)progress) / fileSize * 100), filePath);
+                                         double _percentage = Math.Round(((double)progress) / fileSize * 100);
+                                         if (_percentage != percentage)
+                                         {
+                                             percentage = _percentage;
+                                             logger.Verbose("Uploading...{progress}% {path}", _percentage , filePath);
+                                         }
                                      }));
                     logger.Debug("Finish Upload {path} to azure storage", filePath);
 
@@ -339,6 +345,8 @@ namespace backup_dl
                 }
             }
         }
+
+        private static void Progress_ProgressChanged(object sender, long e) => throw new NotImplementedException();
 
         /// <summary>
         /// 路徑做檢查和轉換
