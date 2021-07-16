@@ -169,6 +169,7 @@ namespace backup_dl
                     ? match.Groups[1].Value
                     : Path.GetFileNameWithoutExtension(filePath);
                 string title = id;
+                float? duration = null;
 
                 if (ProcessedIds.Contains(id)) continue;
                 ProcessedIds.Add(id);
@@ -226,6 +227,7 @@ namespace backup_dl
                             }
 
                             title = videoData?.Title;
+                            duration = videoData.Duration;
 
                             string newPath = CalculatePath(filePath, videoData?.Title, videoData?.UploadDate);
                             return (newPath, videoData);
@@ -265,7 +267,7 @@ namespace backup_dl
                     {
                         string newPath = res.Result;
                         logger.Information("Start Uploading: {path}", res.Result);
-                        Task<bool> task = UploadToAzure(tempDir, newPath);
+                        Task<bool> task = UploadToAzure(tempDir, newPath, ID: id, duration: duration);
                         task.Wait();
                         return task.IsCompletedSuccessfully && task.Result ? newPath : null;
                     })
@@ -294,7 +296,7 @@ namespace backup_dl
         /// <param name="tempDir">用來計算Storage內路徑的基準路徑</param>
         /// <param name="filePath">上傳檔案路徑</param>
         /// <returns></returns>
-        private static async Task<bool> UploadToAzure(string tempDir, string filePath, bool retry = true, string ContentType = "video/x-matroska")
+        private static async Task<bool> UploadToAzure(string tempDir, string filePath, bool retry = true, string ContentType = "video/x-matroska", string ID = null, float? duration = null)
         {
             bool isVideo = ContentType == "video/x-matroska";
             try
@@ -315,6 +317,10 @@ namespace backup_dl
                         .UploadAsync(content: fs,
                                      httpHeaders: new BlobHttpHeaders { ContentType = ContentType },
                                      accessTier: accessTire,
+                                     metadata: new Dictionary<string, string>() {
+                                         {"id", ID},
+                                         {"duration", duration.ToString() }
+                                     },
                                      progressHandler: new Progress<long>(progress =>
                                      {
                                          double _percentage = Math.Round(((double)progress) / fileSize * 100);
@@ -335,7 +341,7 @@ namespace backup_dl
                 if (retry)
                 {
                     // Retry Once
-                    return await UploadToAzure(tempDir, filePath, false);
+                    return await UploadToAzure(tempDir, filePath, false, ContentType, ID, duration);
                 }
                 else
                 {
