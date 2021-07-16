@@ -321,7 +321,6 @@ namespace backup_dl
                         };
                     // 覆寫
                     BlobClient blobClient = containerClient.GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}");
-                    _ = blobClient.SetTags(tags);
                     _ = await blobClient.UploadAsync(
                         content: fs,
                         httpHeaders: new BlobHttpHeaders { ContentType = ContentType },
@@ -337,6 +336,7 @@ namespace backup_dl
                             }
                         })
                     );
+                    _ = await blobClient.SetTagsAsync(tags);
                     logger.Debug("Finish Upload {path} to azure storage", filePath);
 
                     if (isVideo) File.Delete(filePath);
