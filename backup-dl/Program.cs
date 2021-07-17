@@ -359,8 +359,6 @@ namespace backup_dl
             }
         }
 
-        private static void Progress_ProgressChanged(object sender, long e) => throw new NotImplementedException();
-
         /// <summary>
         /// 路徑做檢查和轉換
         /// </summary>
