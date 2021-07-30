@@ -375,16 +375,13 @@ namespace backup_dl
             date ??= DateTime.Now;
 
             string newPath = Path.Combine(Path.GetDirectoryName(oldPath), $"{date:yyyyMMdd} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
-            if (!PathIsValid(newPath))
+            // 截短
+            if (newPath.Length >= 260)
             {
-                // 截短
-                if (newPath.Length >= 260)
-                {
-                    title = title.Substring(0, title.Length - (newPath.Length - 260) - 5);
-                }
+                title = title.Substring(0, title.Length - (newPath.Length - 260) - 5);
                 newPath = Path.Combine(Path.GetDirectoryName(oldPath), $"{date:yyyyMMdd} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
             }
-            if (!PathIsValid(newPath) || string.IsNullOrEmpty(title))
+            if (string.IsNullOrEmpty(title))
             {
                 // 延用舊檔名，先將原檔移到暫存路徑，ffmpeg轉換時輸出至原位
                 newPath = oldPath;
@@ -397,20 +394,6 @@ namespace backup_dl
 
             logger.Debug("Rename file: {oldPath} => {newPath}", oldPath, newPath);
             return newPath;
-        }
-
-        // https://codereview.stackexchange.com/questions/120002/windows-filepath-and-filename-validation
-        private static bool PathIsValid(string inputPath)
-        {
-            try
-            {
-                _ = Path.GetFullPath(inputPath);
-                return true;
-            }
-            catch (PathTooLongException)
-            {
-                return false;
-            }
         }
 
         /// <summary>
