@@ -1,17 +1,18 @@
-﻿using System;
+﻿using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
+using Serilog;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Azure;
-using Azure.Storage.Blobs;
-using Azure.Storage.Blobs.Models;
-using Serilog;
 using Xabe.FFmpeg;
 using YoutubeDLSharp;
+using YoutubeDLSharp.Helpers;
 using YoutubeDLSharp.Metadata;
 using YoutubeDLSharp.Options;
 
@@ -196,7 +197,7 @@ namespace backup_dl
                 {
                     CancellationTokenSource cancel = new();
                     task = new YoutubeDL() { YoutubeDLPath = YtdlPath }
-                        .RunVideoDataFetch($"https://www.youtube.com/watch?v={id}", overrideOptions: overrideOptions)
+                        .RunVideoDataFetch_Fix($"https://www.youtube.com/watch?v={id}", overrideOptions: overrideOptions)
                         .ContinueWith((res) =>
                         {
                             VideoData videoData = null;
@@ -236,7 +237,7 @@ namespace backup_dl
                             {
                                 VideoData resultVideoData = null;
                                 using (Task<RunResult<VideoData>> _task = new YoutubeDL() { YoutubeDLPath = YtdlPath }
-                                    .RunVideoDataFetch($"https://www.youtube.com/watch?v={id}", overrideOptions: overrideOptions))
+                                    .RunVideoDataFetch_Fix($"https://www.youtube.com/watch?v={id}", overrideOptions: overrideOptions))
                                 {
                                     _task.Wait();
                                     if (_task.IsCompletedSuccessfully && _task.Result.Success)
@@ -506,6 +507,66 @@ namespace backup_dl
 
             // Uri's use forward slashes so convert back to backward slashes
             return Uri.UnescapeDataString(relativeUri.ToString()).Replace("/", "\\");
+        }
+    }
+
+    static class Extension
+    {
+        /// <summary>
+        /// Copy of YoutubeDL.RunVideoDataFetch()
+        /// </summary>
+        /// <param name="ytdl"></param>
+        /// <param name="url"></param>
+        /// <param name="ct"></param>
+        /// <param name="flat"></param>
+        /// <param name="overrideOptions"></param>
+        /// <returns></returns>
+        public static async Task<RunResult<VideoData>> RunVideoDataFetch_Fix(this YoutubeDL ytdl, string url, CancellationToken ct = default(CancellationToken), bool flat = true, OptionSet overrideOptions = null)
+        {
+            OptionSet optionSet = new OptionSet
+            {
+                IgnoreErrors = ytdl.IgnoreDownloadErrors,
+                IgnoreConfig = true,
+                NoPlaylist = true,
+                HlsPreferNative = true,
+                ExternalDownloaderArgs = "-nostats -loglevel 0",
+                Output = Path.Combine(ytdl.OutputFolder, ytdl.OutputFileTemplate),
+                RestrictFilenames = ytdl.RestrictFilenames,
+                NoContinue = ytdl.OverwriteFiles,
+                NoOverwrites = !ytdl.OverwriteFiles,
+                NoPart = true,
+                FfmpegLocation = Utils.GetFullPath(ytdl.FFmpegPath),
+                Exec = "echo {}"
+            };
+            if (overrideOptions != null)
+            {
+                optionSet = optionSet.OverrideOptions(overrideOptions);
+            }
+
+            optionSet.DumpSingleJson = true;
+            optionSet.FlatPlaylist = flat;
+            VideoData videoData = null;
+            YoutubeDLProcess youtubeDLProcess = new YoutubeDLProcess(ytdl.YoutubeDLPath);
+            youtubeDLProcess.OutputReceived += delegate (object o, System.Diagnostics.DataReceivedEventArgs e)
+            {
+                // Workaround: Fix invalid json directly
+                var data = e.Data.Replace("\"[{", "[{")
+                                 .Replace("}]\"", "}]")
+                                 .Replace("False", "false")
+                                 .Replace("True", "true") ;
+                // Change 'sth' to "sth"
+                data = new Regex(@"'([^'\r\n\s]*(?:\\.[^'\r\n\s]*)*)'")
+                                .Replace(data, @"""$1""");
+                videoData = Newtonsoft.Json.JsonConvert.DeserializeObject<VideoData>(data);
+            };
+            FieldInfo fieldInfo = typeof(YoutubeDL).GetField("runner", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.GetField | BindingFlags.SetField);
+            (int, string[]) obj = await (fieldInfo.GetValue(ytdl) as ProcessRunner).RunThrottled(youtubeDLProcess, new string[1]
+            {
+                url
+            }, optionSet, ct);
+            int item = obj.Item1;
+            string[] item2 = obj.Item2;
+            return new RunResult<VideoData>(item == 0, item2, videoData);
         }
     }
 }
