@@ -377,9 +377,9 @@ namespace backup_dl
 
             string newPath = Path.Combine(Path.GetDirectoryName(oldPath), $"{date:yyyyMMdd} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
             // 截短
-            if (newPath.Length >= 260)
+            if (newPath.Length >= 180)
             {
-                title = title.Substring(0, title.Length - (newPath.Length - 260) - 5);
+                title = title.Substring(0, title.Length - (newPath.Length - 180) - 5);
                 newPath = Path.Combine(Path.GetDirectoryName(oldPath), $"{date:yyyyMMdd} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
             }
             if (string.IsNullOrEmpty(title))
