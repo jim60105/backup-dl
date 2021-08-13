@@ -160,6 +160,9 @@ namespace backup_dl
             List<string> files = Directory.EnumerateFiles(tempDir, "*.mkv", SearchOption.AllDirectories).ToList();
             List<Task> tasks = new();
 
+            // 同步執行
+            bool sync = null != Environment.GetEnvironmentVariable("SCYNCHRONOUS");
+
             foreach (string filePath in files)
             {
                 // 剛由ytdl下載完的檔案，檔名為 {id}
@@ -286,6 +289,8 @@ namespace backup_dl
                     }, TaskContinuationOptions.ExecuteSynchronously);
 
                 tasks.Add(finalTask);
+
+                if (sync) task.Wait();
             }
             return tasks;
         }

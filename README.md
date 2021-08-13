@@ -26,6 +26,7 @@ docker pull ghcr.io/jim60105/backup-dl:latest
 - `CHANNELS_IN_ARRAY`: 欲下載的頻道網址，以陣列傳入
 - `MAX_DOWNLOAD`: (可選)每次執行的最大下載數量，預設為10
 - `FORMAT`: (可選)自訂欲下載的格式，預設為`bestvideo+bestaudio/best`，請參考[yt-dlp說明文件](https://github.com/yt-dlp/yt-dlp#format-selection)
+- `SCYNCHRONOUS`: (可選)以同步的方式執行程式，請只在單執行緒機器使用
 
 ### Volume Binding
 
