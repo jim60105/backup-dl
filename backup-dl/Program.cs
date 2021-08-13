@@ -372,16 +372,11 @@ namespace backup_dl
             title ??= "";
             // 取代掉檔名中的非法字元
             title = string.Join(string.Empty, title.Split(Path.GetInvalidFileNameChars()))
-                          .Replace(".", string.Empty);
+                          .Replace(".", string.Empty)
+                          .Substring(0, 150);
             date ??= DateTime.Now;
 
             string newPath = Path.Combine(Path.GetDirectoryName(oldPath), $"{date:yyyyMMdd} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
-            // 截短
-            if (newPath.Length >= 180)
-            {
-                title = title.Substring(0, title.Length - (newPath.Length - 180) - 5);
-                newPath = Path.Combine(Path.GetDirectoryName(oldPath), $"{date:yyyyMMdd} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
-            }
             if (string.IsNullOrEmpty(title))
             {
                 // 延用舊檔名，先將原檔移到暫存路徑，ffmpeg轉換時輸出至原位
@@ -553,7 +548,7 @@ namespace backup_dl
                 var data = e.Data.Replace("\"[{", "[{")
                                  .Replace("}]\"", "}]")
                                  .Replace("False", "false")
-                                 .Replace("True", "true") ;
+                                 .Replace("True", "true");
                 // Change 'sth' to "sth"
                 data = new Regex(@"'([^'\r\n\s]*(?:\\.[^'\r\n\s]*)*)'")
                                 .Replace(data, @"""$1""");
