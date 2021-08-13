@@ -377,8 +377,10 @@ namespace backup_dl
             title ??= "";
             // 取代掉檔名中的非法字元
             title = string.Join(string.Empty, title.Split(Path.GetInvalidFileNameChars()))
-                          .Replace(".", string.Empty)
-                          .Substring(0, 150);
+                          .Replace(".", string.Empty);
+            // 截短
+            title = title.Substring(0, title.Length < 150 ? title.Length : 150);
+
             date ??= DateTime.Now;
 
             string newPath = Path.Combine(Path.GetDirectoryName(oldPath), $"{date:yyyyMMdd} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
