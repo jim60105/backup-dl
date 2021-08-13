@@ -379,7 +379,7 @@ namespace backup_dl
             title = string.Join(string.Empty, title.Split(Path.GetInvalidFileNameChars()))
                           .Replace(".", string.Empty);
             // 截短
-            title = title.Substring(0, title.Length < 150 ? title.Length : 150);
+            title = title.Substring(0, title.Length < 80 ? title.Length : 80);
 
             date ??= DateTime.Now;
 
