@@ -290,7 +290,7 @@ namespace backup_dl
 
                 tasks.Add(finalTask);
 
-                if (sync) task.Wait();
+                if (sync) finalTask.Wait();
             }
             return tasks;
         }
