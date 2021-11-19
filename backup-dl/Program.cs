@@ -556,8 +556,8 @@ namespace backup_dl
                                  .Replace("}]\"", "}]")
                                  .Replace("False", "false")
                                  .Replace("True", "true");
-                // Change 'sth' to "sth"
-                data = new Regex(@"'([^'\r\n\s]*(?:\\.[^'\r\n\s]*)*)'")
+                // Change json string from 'sth' to "sth"
+                data = new Regex(@"(?:[\s:\[\{\(])'([^'\r\n\s]*)'(?:\s,]}\))")
                                 .Replace(data, @"""$1""");
                 videoData = Newtonsoft.Json.JsonConvert.DeserializeObject<VideoData>(data);
             };
