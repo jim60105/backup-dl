@@ -374,29 +374,37 @@ namespace backup_dl
         /// <returns></returns>
         private static string CalculatePath(string oldPath, string title, DateTime? date)
         {
-            title ??= "";
-            // 取代掉檔名中的非法字元
-            title = string.Join(string.Empty, title.Split(Path.GetInvalidFileNameChars()))
-                          .Replace(".", string.Empty);
-            // 截短
-            title = title.Substring(0, title.Length < 80 ? title.Length : 80);
-
-            date ??= DateTime.Now;
-
-            string newPath = Path.Combine(Path.GetDirectoryName(oldPath), $"{date:yyyyMMdd} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
-            if (string.IsNullOrEmpty(title))
+            string newPath = "";
+            try
             {
-                // 延用舊檔名，先將原檔移到暫存路徑，ffmpeg轉換時輸出至原位
-                newPath = oldPath;
-            }
-            if (newPath != oldPath)
-            {
-                File.Move(oldPath, newPath);
-                File.Delete(oldPath);
-            }
+                title ??= "";
+                // 取代掉檔名中的非法字元
+                title = string.Join(string.Empty, title.Split(Path.GetInvalidFileNameChars()))
+                              .Replace(".", string.Empty);
+                // 截短
+                title = title.Substring(0, title.Length < 80 ? title.Length : 80);
 
-            logger.Debug("Rename file: {oldPath} => {newPath}", oldPath, newPath);
-            return newPath;
+                date ??= DateTime.Now;
+
+                newPath = Path.Combine(Path.GetDirectoryName(oldPath), $"{date:yyyyMMdd} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
+                if (string.IsNullOrEmpty(title))
+                {
+                    // 延用舊檔名，先將原檔移到暫存路徑，ffmpeg轉換時輸出至原位
+                    newPath = oldPath;
+                }
+                if (newPath != oldPath)
+                {
+                    File.Move(oldPath, newPath);
+                    File.Delete(oldPath);
+                }
+
+                logger.Debug("Rename file: {oldPath} => {newPath}", oldPath, newPath);
+                return newPath;
+            }catch(Exception e){
+                logger.Error("File name calculate failed! {oldPath}, {newPath}, {title}, {date}", oldPath, newPath, title, date?.ToString("yyyyMMdd"));
+                logger.Error(e.Message);
+                throw;
+            }
         }
 
         /// <summary>
