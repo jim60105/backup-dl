@@ -5,7 +5,7 @@ WORKDIR /app
 ENV AZURE_STORAGE_CONNECTION_STRING_VTUBER="ChangeThis"
 ENV CHANNELS_IN_ARRAY="[\"https://www.youtube.com/channel/UCBC7vYFNQoGPupe5NxPG4Bw\"]"
 ENV MAX_DOWNLOAD="10"
-RUN apk add --no-cache --virtual build-deps musl-dev gcc &&\
+RUN apk add --no-cache --virtual build-deps musl-dev gcc g++ python3-dev &&\
     apk add --no-cache aria2 ffmpeg py3-pip &&\
     pip install --upgrade yt-dlp &&\
     apk del build-deps
