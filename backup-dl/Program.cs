@@ -444,6 +444,7 @@ namespace backup_dl
                     logger.Debug("Start Embed thumbnail: {path}", filePath);
                     IConversion conversion = new Conversion().AddParameter($" -i \"{filePath}\" -y -codec copy", ParameterPosition.PreInput)
                                                              .AddParameter($" -attach \"{jpgPath}\" -map 0 -metadata:s:t:0 mimetype=image/jpeg -metadata:s:t:0 filename=cover.jpg ", ParameterPosition.PreInput)
+                                                             .AddParameter(" -cues_to_front true ", ParameterPosition.PostInput)
                                                              .SetOutputFormat(Format.matroska)
                                                              .SetOutput(tempPath);
                     logger.Debug("FFmpeg arguments: {arguments}", conversion.Build());
