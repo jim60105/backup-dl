@@ -530,9 +530,11 @@ namespace backup_dl
         /// <param name="flat"></param>
         /// <param name="overrideOptions"></param>
         /// <returns></returns>
+#pragma warning disable CA1068 // CancellationToken 參數必須位於最後
         public static async Task<RunResult<VideoData>> RunVideoDataFetch_Fix(this YoutubeDL ytdl, string url, CancellationToken ct = default, bool flat = true, OptionSet overrideOptions = null)
+#pragma warning restore CA1068 // CancellationToken 參數必須位於最後
         {
-            OptionSet optionSet = new OptionSet
+            OptionSet optionSet = new()
             {
                 IgnoreErrors = ytdl.IgnoreDownloadErrors,
                 IgnoreConfig = true,
@@ -556,7 +558,7 @@ namespace backup_dl
             optionSet.FlatPlaylist = flat;
             VideoData videoData = null;
             YoutubeDLProcess youtubeDLProcess = new(ytdl.YoutubeDLPath);
-            youtubeDLProcess.OutputReceived += delegate (object o, System.Diagnostics.DataReceivedEventArgs e)
+            youtubeDLProcess.OutputReceived += (o, e) =>
             {
                 // Workaround: Fix invalid json directly
                 var data = e.Data.Replace("\"[{", "[{")
@@ -569,13 +571,8 @@ namespace backup_dl
                 videoData = Newtonsoft.Json.JsonConvert.DeserializeObject<VideoData>(data);
             };
             FieldInfo fieldInfo = typeof(YoutubeDL).GetField("runner", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.GetField | BindingFlags.SetField);
-            (int, string[]) obj = await (fieldInfo.GetValue(ytdl) as ProcessRunner).RunThrottled(youtubeDLProcess, new string[1]
-            {
-                url
-            }, optionSet, ct);
-            int item = obj.Item1;
-            string[] item2 = obj.Item2;
-            return new RunResult<VideoData>(item == 0, item2, videoData);
+            (int code, string[] errors) = await (fieldInfo.GetValue(ytdl) as ProcessRunner).RunThrottled(youtubeDLProcess, new[] { url }, optionSet, ct);
+            return new RunResult<VideoData>(code == 0, errors, videoData);
         }
     }
 }
