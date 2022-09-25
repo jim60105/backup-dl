@@ -307,47 +307,45 @@ namespace backup_dl
             bool isVideo = ContentType == "video/x-matroska";
             try
             {
-                using (FileStream fs = new(filePath, FileMode.Open, FileAccess.Read))
-                {
-                    logger.Debug("Start Upload {path} to azure storage", filePath);
-                    AccessTier accessTire = isVideo
-                                            ? AccessTier.Archive
-                                            : AccessTier.Hot;
+                using FileStream fs = new(filePath, FileMode.Open, FileAccess.Read);
+                logger.Debug("Start Upload {path} to azure storage", filePath);
+                AccessTier accessTire = isVideo
+                                        ? AccessTier.Archive
+                                        : AccessTier.Hot;
 
-                    long fileSize = new FileInfo(filePath).Length;
+                long fileSize = new FileInfo(filePath).Length;
 
-                    double percentage = 0;
-                    Dictionary<string, string> tags =
-                        (null == ID || null == duration)
-                        ? new()
-                        : new()
-                        {
+                double percentage = 0;
+                Dictionary<string, string> tags =
+                    (null == ID || null == duration)
+                    ? new()
+                    : new()
+                    {
                             { "id", ID },
                             { "duration", duration?.ToString() }
-                        };
-                    // 覆寫
-                    BlobClient blobClient = containerClient.GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}");
-                    _ = await blobClient.UploadAsync(
-                        content: fs,
-                        httpHeaders: new BlobHttpHeaders { ContentType = ContentType },
-                        accessTier: accessTire,
-                        metadata: tags,
-                        progressHandler: new Progress<long>(progress =>
+                    };
+                // 覆寫
+                BlobClient blobClient = containerClient.GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}");
+                _ = await blobClient.UploadAsync(
+                    content: fs,
+                    httpHeaders: new BlobHttpHeaders { ContentType = ContentType },
+                    accessTier: accessTire,
+                    metadata: tags,
+                    progressHandler: new Progress<long>(progress =>
+                    {
+                        double _percentage = Math.Round(((double)progress) / fileSize * 100);
+                        if (_percentage != percentage)
                         {
-                            double _percentage = Math.Round(((double)progress) / fileSize * 100);
-                            if (_percentage != percentage)
-                            {
-                                percentage = _percentage;
-                                logger.Verbose("Uploading...{progress}% {path}", _percentage, filePath);
-                            }
-                        })
-                    );
-                    _ = await blobClient.SetTagsAsync(tags);
-                    logger.Debug("Finish Upload {path} to azure storage", filePath);
+                            percentage = _percentage;
+                            logger.Verbose("Uploading...{progress}% {path}", _percentage, filePath);
+                        }
+                    })
+                );
+                _ = await blobClient.SetTagsAsync(tags);
+                logger.Debug("Finish Upload {path} to azure storage", filePath);
 
-                    if (isVideo) File.Delete(filePath);
-                    return true;
-                }
+                if (isVideo) File.Delete(filePath);
+                return true;
             }
             catch (Exception e)
             {
@@ -382,7 +380,7 @@ namespace backup_dl
                 title = string.Join(string.Empty, title.Split(Path.GetInvalidFileNameChars()))
                               .Replace(".", string.Empty);
                 // 截短
-                title = title.Substring(0, title.Length < 80 ? title.Length : 80);
+                title = title[..(title.Length < 80 ? title.Length : 80)];
 
                 date ??= DateTime.Now;
 
@@ -532,7 +530,7 @@ namespace backup_dl
         /// <param name="flat"></param>
         /// <param name="overrideOptions"></param>
         /// <returns></returns>
-        public static async Task<RunResult<VideoData>> RunVideoDataFetch_Fix(this YoutubeDL ytdl, string url, CancellationToken ct = default(CancellationToken), bool flat = true, OptionSet overrideOptions = null)
+        public static async Task<RunResult<VideoData>> RunVideoDataFetch_Fix(this YoutubeDL ytdl, string url, CancellationToken ct = default, bool flat = true, OptionSet overrideOptions = null)
         {
             OptionSet optionSet = new OptionSet
             {
@@ -557,7 +555,7 @@ namespace backup_dl
             optionSet.DumpSingleJson = true;
             optionSet.FlatPlaylist = flat;
             VideoData videoData = null;
-            YoutubeDLProcess youtubeDLProcess = new YoutubeDLProcess(ytdl.YoutubeDLPath);
+            YoutubeDLProcess youtubeDLProcess = new(ytdl.YoutubeDLPath);
             youtubeDLProcess.OutputReceived += delegate (object o, System.Diagnostics.DataReceivedEventArgs e)
             {
                 // Workaround: Fix invalid json directly
