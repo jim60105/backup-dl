@@ -1,5 +1,7 @@
 ﻿using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
+using backup_dl.Helper;
+using backup_dl.Models;
 using Serilog;
 using System;
 using System.Collections.Generic;
@@ -199,11 +201,11 @@ namespace backup_dl
                 else
                 {
                     CancellationTokenSource cancel = new();
-                    task = new YoutubeDL() { YoutubeDLPath = YtdlPath }
-                        .RunVideoDataFetch_Fix($"https://www.youtube.com/watch?v={id}", overrideOptions: overrideOptions)
+                    task = new YoutubeDLSharp.YoutubeDL() { YoutubeDLPath = YtdlPath }
+                        .RunVideoDataFetch_Alt($"https://www.youtube.com/watch?v={id}", overrideOptions: overrideOptions)
                         .ContinueWith((res) =>
                         {
-                            VideoData videoData = null;
+                            YtdlpVideoData videoData = null;
                             if (res.IsCompletedSuccessfully && res.Result.Success)
                             {
                                 videoData = res.Result.Data;
@@ -233,14 +235,14 @@ namespace backup_dl
                             title = videoData?.Title;
                             duration = videoData.Duration;
 
-                            string newPath = CalculatePath(filePath, videoData?.Title, videoData?.UploadDate);
+                            string newPath = CalculatePath(filePath, videoData?.Title, DateTime.Parse(videoData?.UploadDate));
                             return (newPath, videoData);
 
-                            VideoData TryAgainWithId(string id)
+                            YtdlpVideoData TryAgainWithId(string id)
                             {
-                                VideoData resultVideoData = null;
-                                using (Task<RunResult<VideoData>> _task = new YoutubeDL() { YoutubeDLPath = YtdlPath }
-                                    .RunVideoDataFetch_Fix($"https://www.youtube.com/watch?v={id}", overrideOptions: overrideOptions))
+                                YtdlpVideoData resultVideoData = null;
+                                using (Task<RunResult<YtdlpVideoData>> _task = new YoutubeDLSharp.YoutubeDL() { YoutubeDLPath = YtdlPath }
+                                    .RunVideoDataFetch_Alt($"https://www.youtube.com/watch?v={id}", overrideOptions: overrideOptions))
                                 {
                                     _task.Wait();
                                     if (_task.IsCompletedSuccessfully && _task.Result.Success)
@@ -255,7 +257,7 @@ namespace backup_dl
                         {
                             if (!res.IsCompletedSuccessfully) cancel.Cancel();
 
-                            (string newPath, VideoData videoData) = res.Result;
+                            (string newPath, YtdlpVideoData videoData) = res.Result;
                             AddMetaData(newPath, videoData).Wait();
                             return newPath;
                         }, cancel.Token)
@@ -442,7 +444,7 @@ namespace backup_dl
                     logger.Debug("Start Embed thumbnail: {path}", filePath);
                     IConversion conversion = new Conversion().AddParameter($" -i \"{filePath}\" -y -codec copy", ParameterPosition.PreInput)
                                                              .AddParameter($" -attach \"{jpgPath}\" -map 0 -metadata:s:t:0 mimetype=image/jpeg -metadata:s:t:0 filename=cover.jpg ", ParameterPosition.PreInput)
-                                                             .SetOutputFormat(Format.matroska)
+                                                             .SetOutputFormat(Xabe.FFmpeg.Format.matroska)
                                                              .SetOutput(tempPath);
                     logger.Debug("FFmpeg arguments: {arguments}", conversion.Build());
                     _ = await conversion.Start();
@@ -472,7 +474,7 @@ namespace backup_dl
         /// <param name="filePath"></param>
         /// <param name="video"></param>
         /// <returns></returns>
-        private static async Task AddMetaData(string filePath, VideoData video)
+        private static async Task AddMetaData(string filePath, YtdlpVideoData video)
         {
             try
             {
@@ -481,14 +483,14 @@ namespace backup_dl
                 // 加MetaData
                 string title = video.Title;
                 string artist = video.Uploader;
-                DateTime date = video.UploadDate ?? DateTime.Now;
+                DateTime date = !string.IsNullOrEmpty(video.UploadDate) ? DateTime.Parse(video.UploadDate) : DateTime.Now;
                 string description = video.Description;
 
                 var tempPath = Path.GetTempFileName();
                 logger.Debug("Start Add matadata: {path}", filePath);
                 IConversion conversion = new Conversion().AddParameter($"-i \"{filePath}\" -y -codec copy -map 0", ParameterPosition.PreInput)
                                                          .AddParameter($"-metadata title=\"{title}\" -metadata artist=\"{artist}\" -metadata date=\"{date:u}\" -metadata description=\"{description}\" -metadata comment=\"{description}\"", ParameterPosition.PreInput)
-                                                         .SetOutputFormat(Format.matroska)
+                                                         .SetOutputFormat(Xabe.FFmpeg.Format.matroska)
                                                          .SetOutput(tempPath);
                 logger.Debug("FFmpeg arguments: {arguments}", conversion.Build());
                 _ = await conversion.Start();
@@ -515,63 +517,6 @@ namespace backup_dl
 
             // Uri's use forward slashes so convert back to backward slashes
             return Uri.UnescapeDataString(relativeUri.ToString()).Replace("/", "\\");
-        }
-    }
-
-    static class Extension
-    {
-        /// <summary>
-        /// Copy of YoutubeDL.RunVideoDataFetch()
-        /// </summary>
-        /// <param name="ytdl"></param>
-        /// <param name="url"></param>
-        /// <param name="ct"></param>
-        /// <param name="flat"></param>
-        /// <param name="overrideOptions"></param>
-        /// <returns></returns>
-#pragma warning disable CA1068 // CancellationToken 參數必須位於最後
-        public static async Task<RunResult<VideoData>> RunVideoDataFetch_Fix(this YoutubeDL ytdl, string url, CancellationToken ct = default, bool flat = true, OptionSet overrideOptions = null)
-#pragma warning restore CA1068 // CancellationToken 參數必須位於最後
-        {
-            OptionSet optionSet = new()
-            {
-                IgnoreErrors = ytdl.IgnoreDownloadErrors,
-                IgnoreConfig = true,
-                NoPlaylist = true,
-                HlsPreferNative = true,
-                ExternalDownloaderArgs = "-nostats -loglevel 0",
-                Output = Path.Combine(ytdl.OutputFolder, ytdl.OutputFileTemplate),
-                RestrictFilenames = ytdl.RestrictFilenames,
-                NoContinue = ytdl.OverwriteFiles,
-                NoOverwrites = !ytdl.OverwriteFiles,
-                NoPart = true,
-                FfmpegLocation = Utils.GetFullPath(ytdl.FFmpegPath),
-                Exec = "echo {}"
-            };
-            if (overrideOptions != null)
-            {
-                optionSet = optionSet.OverrideOptions(overrideOptions);
-            }
-
-            optionSet.DumpSingleJson = true;
-            optionSet.FlatPlaylist = flat;
-            VideoData videoData = null;
-            YoutubeDLProcess youtubeDLProcess = new(ytdl.YoutubeDLPath);
-            youtubeDLProcess.OutputReceived += (o, e) =>
-            {
-                // Workaround: Fix invalid json directly
-                var data = e.Data.Replace("\"[{", "[{")
-                                 .Replace("}]\"", "}]")
-                                 .Replace("False", "false")
-                                 .Replace("True", "true");
-                // Change json string from 'sth' to "sth"
-                data = new Regex(@"(?:[\s:\[\{\(])'([^'\r\n\s]*)'(?:\s,]}\))")
-                                .Replace(data, @"""$1""");
-                videoData = Newtonsoft.Json.JsonConvert.DeserializeObject<VideoData>(data);
-            };
-            FieldInfo fieldInfo = typeof(YoutubeDL).GetField("runner", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.GetField | BindingFlags.SetField);
-            (int code, string[] errors) = await (fieldInfo.GetValue(ytdl) as ProcessRunner).RunThrottled(youtubeDLProcess, new[] { url }, optionSet, ct);
-            return new RunResult<VideoData>(code == 0, errors, videoData);
         }
     }
 }
