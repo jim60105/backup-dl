@@ -7,15 +7,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Xabe.FFmpeg;
 using YoutubeDLSharp;
-using YoutubeDLSharp.Helpers;
-using YoutubeDLSharp.Metadata;
 using YoutubeDLSharp.Options;
 
 namespace backup_dl
@@ -400,7 +397,9 @@ namespace backup_dl
 
                 logger.Debug("Rename file: {oldPath} => {newPath}", oldPath, newPath);
                 return newPath;
-            }catch(Exception e){
+            }
+            catch (Exception e)
+            {
                 logger.Error("File name calculate failed! {oldPath}, {newPath}, {title}, {date}", oldPath, newPath, title, date?.ToString("yyyyMMdd"));
                 logger.Error(e.Message);
                 throw;

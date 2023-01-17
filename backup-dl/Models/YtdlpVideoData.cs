@@ -82,7 +82,9 @@ public class Format
     public double? Abr { get; set; }
 
     [JsonProperty("format")]
+#pragma warning disable IDE1006 // 命名樣式
     public string _Format { get; set; }
+#pragma warning restore IDE1006 // 命名樣式
 
     [JsonProperty("resolution")]
     public string Resolution { get; set; }
@@ -409,7 +411,9 @@ public class Thumbnail
 public class Version
 {
     [JsonProperty("version")]
+#pragma warning disable IDE1006 // 命名樣式
     public string _Version { get; set; }
+#pragma warning restore IDE1006 // 命名樣式
 
     [JsonProperty("release_git_head")]
     public string ReleaseGitHead { get; set; }

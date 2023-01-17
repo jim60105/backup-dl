@@ -22,7 +22,9 @@ internal static partial class YoutubeDL
     /// <param name="flat"></param>
     /// <param name="overrideOptions"></param>
     /// <returns></returns>
+#pragma warning disable CA1068 // CancellationToken 參數必須位於最後
     public static async Task<RunResult<YtdlpVideoData>> RunVideoDataFetch_Alt(this YoutubeDLSharp.YoutubeDL ytdl, string url, CancellationToken ct = default, bool flat = true, OptionSet overrideOptions = null)
+#pragma warning restore CA1068 // CancellationToken 參數必須位於最後
     {
         OptionSet optionSet = new()
         {
