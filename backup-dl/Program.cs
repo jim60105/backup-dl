@@ -142,6 +142,10 @@ namespace backup_dl
                 Task.WaitAll(tasks.ToArray());
                 logger.Debug("All tasks are completed. Total time spent: {timeSpent}", (DateTime.Now - startTime).ToString("hh\\:mm\\:ss"));
             }
+            catch(Exception e)
+            {
+                logger.Error(e, "Unhandled Exception!");
+            }
             finally
             {
                 Directory.Delete(tempDir, true);
