@@ -5,6 +5,7 @@ using backup_dl.Models;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -232,7 +233,7 @@ namespace backup_dl
                             title = videoData?.Title;
                             duration = videoData.Duration;
 
-                            string newPath = CalculatePath(filePath, videoData?.Title, DateTime.Parse(videoData?.UploadDate));
+                            string newPath = CalculatePath(filePath, videoData?.Title, videoData?.UploadDate);
                             return (newPath, videoData);
 
                             YtdlpVideoData TryAgainWithId(string id)
@@ -367,9 +368,9 @@ namespace backup_dl
         /// </summary>
         /// <param name="oldPath"></param>
         /// <param name="title">影片標題，用做檔名</param>
-        /// <param name="date">影片日期，用做檔名</param>
+        /// <param name="date">影片日期，用做檔名 yyyyMMdd</param>
         /// <returns></returns>
-        private static string CalculatePath(string oldPath, string title, DateTime? date)
+        private static string CalculatePath(string oldPath, string title, string date)
         {
             string newPath = "";
             try
@@ -381,9 +382,9 @@ namespace backup_dl
                 // 截短
                 title = title[..(title.Length < 80 ? title.Length : 80)];
 
-                date ??= DateTime.Now;
+                date ??= "1970101";
 
-                newPath = Path.Combine(Path.GetDirectoryName(oldPath), $"{date:yyyyMMdd} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
+                newPath = Path.Combine(Path.GetDirectoryName(oldPath), $"{date} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
                 if (string.IsNullOrEmpty(title))
                 {
                     // 延用舊檔名，先將原檔移到暫存路徑，ffmpeg轉換時輸出至原位
@@ -400,7 +401,7 @@ namespace backup_dl
             }
             catch (Exception e)
             {
-                logger.Error("File name calculate failed! {oldPath}, {newPath}, {title}, {date}", oldPath, newPath, title, date?.ToString("yyyyMMdd"));
+                logger.Error("File name calculate failed! {oldPath}, {newPath}, {title}, {date}", oldPath, newPath, title, date);
                 logger.Error(e.Message);
                 throw;
             }
@@ -482,7 +483,7 @@ namespace backup_dl
                 // 加MetaData
                 string title = video.Title;
                 string artist = video.Uploader;
-                DateTime date = !string.IsNullOrEmpty(video.UploadDate) ? DateTime.Parse(video.UploadDate) : DateTime.Now;
+                DateTime date = !string.IsNullOrEmpty(video.UploadDate) ? DateTime.ParseExact(video.UploadDate, "yyyyMMdd", CultureInfo.InvariantCulture) : DateTime.Now;
                 string description = video.Description;
 
                 var tempPath = Path.GetTempFileName();
