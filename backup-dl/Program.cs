@@ -328,8 +328,23 @@ namespace backup_dl
                             { "id", ID },
                             { "duration", duration?.ToString() }
                     };
-                // 覆寫
                 BlobClient blobClient = containerClient.GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}");
+
+                // 刪除再寫
+                if (await blobClient.ExistsAsync())
+                {
+                    logger.Warning("Blob already exists! Deleting {blob}", blobClient.Name);
+                    await blobClient.DeleteIfExistsAsync();
+                    blobClient = containerClient.GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}");
+                    while (await blobClient.ExistsAsync())
+                    {
+                        logger.Warning("Blob still exists! Waiting 10 sec...{blob}", blobClient.Name);
+                        await Task.Delay(TimeSpan.FromSeconds(10));
+                        blobClient = containerClient.GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}");
+                    }
+                    logger.Information("Blob Deleted! {blob}", blobClient.Name);
+                }
+
                 _ = await blobClient.UploadAsync(
                     content: fs,
                     httpHeaders: new BlobHttpHeaders { ContentType = ContentType },
