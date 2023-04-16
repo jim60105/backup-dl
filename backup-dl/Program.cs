@@ -79,7 +79,7 @@ namespace backup_dl
                     Output = Path.Combine(tempDir, "%(channel_id)s/%(id)s.%(ext)s"),
                     DownloadArchive = ytdlArchivePath,
                     ExternalDownloader = "aria2c",
-                    ExternalDownloaderArgs = "-j 16 -s 16 -x 16 -k 1M --retry-wait 10 --max-tries 10 --enable-color=false",
+                    ExternalDownloaderArgs = "-j 16 --retry-wait 10 --max-tries 10 --enable-color=false",
                     NoResizeBuffer = true,
                     WriteThumbnail = true,
                     NoColor = true,
