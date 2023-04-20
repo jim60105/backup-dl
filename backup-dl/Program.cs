@@ -330,19 +330,21 @@ namespace backup_dl
                     };
                 BlobClient blobClient = containerClient.GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}");
 
-                // 刪除再寫
                 if (await blobClient.ExistsAsync())
                 {
-                    logger.Warning("Blob already exists! Deleting {blob}", blobClient.Name);
-                    await blobClient.DeleteIfExistsAsync();
-                    blobClient = containerClient.GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}");
-                    while (await blobClient.ExistsAsync())
+                    BlobProperties blobProperties = await blobClient.GetPropertiesAsync();
+                    // 為Archive tier時刪除再寫
+                    if (blobProperties.AccessTier == AccessTier.Archive)
                     {
-                        logger.Warning("Blob still exists! Waiting 10 sec...{blob}", blobClient.Name);
-                        await Task.Delay(TimeSpan.FromSeconds(10));
-                        blobClient = containerClient.GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}");
+                        logger.Warning("Blob is in archive tier! Deleting {blob}", blobClient.Name);
+                        await blobClient.DeleteAsync();
+                        await WaitUntilBlobDeletedAsync(blobClient, TimeSpan.FromSeconds(60));
+                        logger.Information("Blob Deleted! {blob}", blobClient.Name);
                     }
-                    logger.Information("Blob Deleted! {blob}", blobClient.Name);
+                    else
+                    {
+                        logger.Warning("Blob already exists! Overwriting {blob}", blobClient.Name);
+                    }
                 }
 
                 _ = await blobClient.UploadAsync(
@@ -378,6 +380,21 @@ namespace backup_dl
                     logger.Error("Upload Failed: {fileName}", Path.GetFileName(filePath));
                     logger.Error("{errorMessage}", e.Message);
                     return false;
+                }
+            }
+
+            static async Task WaitUntilBlobDeletedAsync(BlobClient blobClient, TimeSpan timeout)
+            {
+                DateTime startTime = DateTime.UtcNow;
+                while (await blobClient.ExistsAsync())
+                {
+                    if (DateTime.UtcNow - startTime > timeout)
+                    {
+                        logger.Warning("Timeout waiting for blob to be deleted. Delete it again.");
+                        await blobClient.DeleteAsync();
+                        startTime = DateTime.UtcNow;
+                    }
+                    await Task.Delay(TimeSpan.FromSeconds(10));
                 }
             }
         }
