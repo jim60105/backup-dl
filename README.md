@@ -69,6 +69,8 @@ docker pull ghcr.io/jim60105/backup-dl:latest
 
 ## 使用方式
 
+### Docker
+
 - 在本機環境變數中儲存connection string，命名為「AZURE_STORAGE_CONNECTION_STRING_VTUBER」\
 連接字串的說明詳見[官方說明文件](https://docs.microsoft.com/zh-tw/azure/storage/common/storage-account-keys-manage?toc=%2Fazure%2Fstorage%2Fblobs%2Ftoc.json&tabs=azure-portal#view-account-access-keys)
 - docker run
@@ -79,6 +81,16 @@ docker pull ghcr.io/jim60105/backup-dl:latest
         --env AZURE_STORAGE_CONNECTION_STRING_VTUBER 
         --env MAX_DOWNLOAD="10" 
         jim60105/backup-dl
+```
+
+### Kubernetes
+
+```sh
+git clone --depth=1 https://github.com/jim60105/backup-dl.git
+cd backup-dl/helm
+vim values.yaml
+kubectl create namespace backupdl
+helm install backup-dl . -n backupdl
 ```
 
 ## LICENSE

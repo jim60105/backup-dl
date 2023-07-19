@@ -1,0 +1,23 @@
+# Default values for backupdl.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+cronJob:
+  schedule: 0 1 * * *
+
+cookies: |
+  # Netscape HTTP Cookie File
+  # http://curl.haxx.se/rfc/cookie_spec.html
+  # This is a generated file!  Do not edit.
+  .youtube.com	TRUE	/	FALSE	1703311569	HSID	123123123
+  .youtube.com	TRUE	/	TRUE	1703311569	SSID	asdfsfasdfsa
+
+env:
+  - name: CHANNELS_IN_ARRAY
+    value: >-
+      ["https://www.youtube.com/channel/UCBC7vYFNQoGPupe5NxPG4Bw",
+      "https://www.youtube.com/playlist?list=UUMOBC7vYFNQoGPupe5NxPG4Bw"]
+  - name: AZURE_STORAGE_CONNECTION_STRING_VTUBER
+    value: DefaultEndpointsProtocol=https;AccountName=myaccount;AccountKey=ooxxooxx;EndpointSuffix=core.windows.net
+  - name: MAX_DOWNLOAD
+    value: "10"

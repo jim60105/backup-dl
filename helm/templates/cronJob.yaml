@@ -1,0 +1,44 @@
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ template "backupdl.fullname" . }}
+  labels:
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}"
+spec:
+  schedule: {{ .Values.cronJob.schedule }}
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          securityContext:
+            runAsNonRoot: true
+          containers:
+          - name: backupdl
+            command:
+            - /bin/sh
+            - -c
+            - cp /cookies.txt /app/cookies.txt && dotnet /app/backup-dl.dll
+            env:
+{{ .Values.env | toYaml | indent 14 }}
+            image: ghcr.io/jim60105/backup-dl
+            imagePullPolicy: Always
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                - ALL
+              runAsGroup: 1000
+              runAsUser: 1000
+              seccompProfile:
+                type: RuntimeDefault
+            volumeMounts:
+            - mountPath: /cookies.txt
+              name: cookies
+              subPath: cookies.txt
+          restartPolicy: Never
+          volumes:
+          - configMap:
+              defaultMode: 420
+              name: {{ template "backupdl.fullname" . }}-cookies
+            name: cookies

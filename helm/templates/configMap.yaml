@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "backupdl.fullname" . }}-cookies
+  labels:
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}"
+data:
+  cookies.txt: {{- .Values.cookies | toYaml | indent 1 }}
