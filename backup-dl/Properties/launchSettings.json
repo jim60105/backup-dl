@@ -4,15 +4,14 @@
       "commandName": "Project",
       "environmentVariables": {
         "CHANNELS_IN_ARRAY": "[\"https://www.youtube.com/channel/UCBC7vYFNQoGPupe5NxPG4Bw\"]",
-        "Max_Download": "2",
-        "AZURE_STORAGE_CONNECTION_STRING_VTUBER": ""
+        "MAX_DOWNLOAD": "2"
       }
     },
     "Docker": {
       "commandName": "Docker",
       "environmentVariables": {
-        "CHANNELS_IN_ARRAY": "[\"https://www.youtube.com/channel/UCiLt4FLjMXszLOh5ISi1oqw\"]",
-        "Max_Download": "1"
+        "CHANNELS_IN_ARRAY": "[\"https://www.youtube.com/channel/UCuy-kZJ7HWwUU-eKv0zUZFQ\"]",
+        "MAX_DOWNLOAD": "1"
       },
       "DockerfileRunArguments": "--env AZURE_STORAGE_CONNECTION_STRING_VTUBER"
     },
