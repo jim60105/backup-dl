@@ -84,7 +84,7 @@ namespace backup_dl
                     NoResizeBuffer = true,
                     WriteThumbnail = true,
                     NoColors = true,
-                    DateBefore = DateTime.UtcNow.AddDays(-2),
+                    DateBefore = DateTime.UtcNow.AddDays(-1),
                     PreferFreeFormats = true
                     //WriteInfoJson = true,
 
