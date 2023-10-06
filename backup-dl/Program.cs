@@ -409,6 +409,9 @@ namespace backup_dl
         private static string CalculatePath(string oldPath, string title, string date)
         {
             string newPath = "";
+            int maxLength = 80;
+            date ??= "19700101";
+
             try
             {
                 title ??= "";
@@ -416,21 +419,15 @@ namespace backup_dl
                 // 取代掉檔名中的非法字元
                 title = string.Join(string.Empty, title.Split(GetInvalidFileNameCharsForWindows()));
 
-                // 截短
-                title = title[..(title.Length < 80 ? title.Length : 80)];
-
-                date ??= "19700101";
-
-                newPath = Path.Combine(Path.GetDirectoryName(oldPath), $"{date} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
-                if (string.IsNullOrEmpty(title))
+                try
                 {
-                    // 延用舊檔名，先將原檔移到暫存路徑，ffmpeg轉換時輸出至原位
-                    newPath = oldPath;
+                    newPath = calcPathAndMoveFile();
                 }
-                if (newPath != oldPath)
+                catch (PathTooLongException)
                 {
-                    File.Move(oldPath, newPath);
-                    File.Delete(oldPath);
+                    logger.Warning("The path is too long! Reduce the maximum title length by half.");
+                    maxLength /= 2;
+                    newPath = calcPathAndMoveFile();
                 }
 
                 logger.Debug("Rename file: {oldPath} => {newPath}", oldPath, newPath);
@@ -452,6 +449,26 @@ namespace backup_dl
                 (char)21, (char)22, (char)23, (char)24, (char)25, (char)26, (char)27, (char)28, (char)29, (char)30,
                 (char)31, ':', '*', '?', '\\', '/', '.' // I added '.'
             };
+
+            string calcPathAndMoveFile()
+            {
+                // 截短
+                title = title[..(title.Length < maxLength ? title.Length : maxLength)];
+
+                string newPath = Path.Combine(Path.GetDirectoryName(oldPath), $"{date} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
+                if (string.IsNullOrEmpty(title))
+                {
+                    // 延用舊檔名，先將原檔移到暫存路徑，ffmpeg轉換時輸出至原位
+                    newPath = oldPath;
+                }
+                if (newPath != oldPath)
+                {
+                    File.Move(oldPath, newPath);
+                    File.Delete(oldPath);
+                }
+
+                return newPath;
+            }
         }
 
         /// <summary>
