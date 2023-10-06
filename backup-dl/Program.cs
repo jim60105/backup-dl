@@ -142,7 +142,7 @@ namespace backup_dl
                 Task.WaitAll(tasks.ToArray());
                 logger.Debug("All tasks are completed. Total time spent: {timeSpent}", (DateTime.Now - startTime).ToString("hh\\:mm\\:ss"));
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 logger.Error(e, "Unhandled Exception!");
             }
@@ -412,13 +412,14 @@ namespace backup_dl
             try
             {
                 title ??= "";
+
                 // 取代掉檔名中的非法字元
-                title = string.Join(string.Empty, title.Split(Path.GetInvalidFileNameChars()))
-                              .Replace(".", string.Empty);
+                title = string.Join(string.Empty, title.Split(GetInvalidFileNameCharsForWindows()));
+
                 // 截短
                 title = title[..(title.Length < 80 ? title.Length : 80)];
 
-                date ??= "1970101";
+                date ??= "19700101";
 
                 newPath = Path.Combine(Path.GetDirectoryName(oldPath), $"{date} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
                 if (string.IsNullOrEmpty(title))
@@ -441,6 +442,16 @@ namespace backup_dl
                 logger.Error(e.Message);
                 throw;
             }
+
+            // https://stackoverflow.com/a/59855809
+            static char[] GetInvalidFileNameCharsForWindows() => new char[]
+            {
+                '\"', '<', '>', '|', '\0',
+                (char)1, (char)2, (char)3, (char)4, (char)5, (char)6, (char)7, (char)8, (char)9, (char)10,
+                (char)11, (char)12, (char)13, (char)14, (char)15, (char)16, (char)17, (char)18, (char)19, (char)20,
+                (char)21, (char)22, (char)23, (char)24, (char)25, (char)26, (char)27, (char)28, (char)29, (char)30,
+                (char)31, ':', '*', '?', '\\', '/', '.' // I added '.'
+            };
         }
 
         /// <summary>
