@@ -77,7 +77,7 @@ namespace backup_dl
                     NoAbortOnError = true,
                     MergeOutputFormat = DownloadMergeFormat.Mkv,
                     NoCheckCertificates = true,
-                    Output = Path.Combine(tempDir, "%(channel_id)s/%(id)s.%(ext)s"),
+                    Output = Path.Combine(tempDir, "%(id)s.%(ext)s"),
                     DownloadArchive = ytdlArchivePath,
                     Downloader = "aria2c",
                     DownloaderArgs = "-j 16 --retry-wait 10 --max-tries 10 --enable-color=false",
