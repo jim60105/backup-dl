@@ -238,7 +238,7 @@ namespace backup_dl
                             title = videoData?.Title;
                             duration = videoData.Duration;
 
-                            string newPath = CalculatePath(filePath, videoData?.Title, videoData?.UploadDate);
+                            string newPath = CalculatePath(filePath, videoData?.Title, videoData?.UploadDate, videoData?.ChannelId);
                             return (newPath, videoData);
 
                             YtdlpVideoData TryAgainWithId(string id)
@@ -407,7 +407,7 @@ namespace backup_dl
         /// <param name="title">影片標題，用做檔名</param>
         /// <param name="date">影片日期，用做檔名 yyyyMMdd</param>
         /// <returns></returns>
-        private static string CalculatePath(string oldPath, string title, string date)
+        private static string CalculatePath(string oldPath, string title, string date, string channelId)
         {
             string newPath = "";
             int maxLength = 80;
@@ -456,7 +456,7 @@ namespace backup_dl
                 // 截短
                 title = title[..(title.Length < maxLength ? title.Length : maxLength)];
 
-                string newPath = Path.Combine(Path.GetDirectoryName(oldPath), $"{date} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
+                string newPath = Path.Combine(Path.GetDirectoryName(oldPath), channelId, $"{date} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
                 if (string.IsNullOrEmpty(title))
                 {
                     // 延用舊檔名，先將原檔移到暫存路徑，ffmpeg轉換時輸出至原位
