@@ -25,7 +25,7 @@ docker pull ghcr.io/jim60105/backup-dl:latest
 - `AZURE_STORAGE_CONNECTION_STRING_VTUBER`: Azure Blob Storage的連接字串
 - `CHANNELS_IN_ARRAY`: 欲下載的頻道網址，以陣列傳入
 - `MAX_DOWNLOAD`: (可選)每次執行的最大下載數量，預設為10
-- `FORMAT`: (可選)自訂欲下載的格式，預設為`bestvideo+bestaudio/best`，請參考[yt-dlp說明文件](https://github.com/yt-dlp/yt-dlp#format-selection)
+- `FORMAT`: (可選)自訂欲下載的格式，預設為`(bv*+ba/b)[protocol^=http][protocol!*=dash]`，請參考[yt-dlp說明文件](https://github.com/yt-dlp/yt-dlp#format-selection)
 - `SCYNCHRONOUS`: (可選)以同步的方式執行程式，請只在單執行緒機器使用
 
 ### Volume Binding
@@ -43,7 +43,7 @@ docker pull ghcr.io/jim60105/backup-dl:latest
 ([DASH的解釋](https://zh.wikipedia.org/wiki/%E5%9F%BA%E4%BA%8EHTTP%E7%9A%84%E5%8A%A8%E6%80%81%E8%87%AA%E9%80%82%E5%BA%94%E6%B5%81)，簡單來說就是專給網路串流使用的技術格式，而這通常不是最好的影片)
 - 可透過環境變數設定下載格式
 - 可限制每次執行的最大下載數量
-- 限制下載兩日前的影片，避免下載到直播中和未轉檔完的影片
+- 限制下載一日前的影片，避免下載到直播中和未轉檔完的影片
 
 ### 影片後處理
 

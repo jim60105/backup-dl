@@ -71,7 +71,8 @@ namespace backup_dl
                 OptionSet optionSet = new()
                 {
                     IgnoreConfig = true,
-                    Format = Environment.GetEnvironmentVariable("FORMAT") ?? "bestvideo+bestaudio/best",
+                    // Download best video available via direct link over HTTP/HTTPS protocol
+                    Format = Environment.GetEnvironmentVariable("FORMAT") ?? "(bv*+ba/b)[protocol^=http][protocol!*=dash]",
                     ExtractorArgs = "youtube:skip=dash",
                     IgnoreErrors = true,
                     NoAbortOnError = true,
@@ -85,6 +86,7 @@ namespace backup_dl
                     WriteThumbnail = true,
                     NoColors = true,
                     DateBefore = DateTime.UtcNow.AddDays(-1),
+                    MatchFilters = "!is_live",
                     PreferFreeFormats = true
                     //WriteInfoJson = true,
 
