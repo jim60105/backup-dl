@@ -457,6 +457,8 @@ namespace backup_dl
                 title = title[..(title.Length < maxLength ? title.Length : maxLength)];
 
                 string newPath = Path.Combine(Path.GetDirectoryName(oldPath), channelId, $"{date} {title} ({Path.GetFileNameWithoutExtension(oldPath)}){Path.GetExtension(oldPath)}");
+                Directory.CreateDirectory(Path.GetDirectoryName(newPath));
+
                 if (string.IsNullOrEmpty(title))
                 {
                     // 延用舊檔名，先將原檔移到暫存路徑，ffmpeg轉換時輸出至原位
