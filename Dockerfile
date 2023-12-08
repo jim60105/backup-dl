@@ -12,10 +12,9 @@ RUN apk add --no-cache --virtual build-deps musl-dev gcc g++ python3-dev &&\
 
 FROM mcr.microsoft.com/dotnet/sdk:7.0-alpine AS build
 WORKDIR /src
-COPY ["backup-dl/backup-dl.csproj", "backup-dl/"]
-RUN dotnet restore "backup-dl/backup-dl.csproj"
+COPY ["backup-dl.csproj", "."]
+RUN dotnet restore "backup-dl.csproj"
 COPY . .
-WORKDIR "/src/backup-dl"
 RUN dotnet build "backup-dl.csproj" -c Release -o /app/build
 
 FROM build AS publish

@@ -10,7 +10,7 @@
     "Docker": {
       "commandName": "Docker",
       "environmentVariables": {
-        "CHANNELS_IN_ARRAY": "[\"https://www.youtube.com/channel/UCuy-kZJ7HWwUU-eKv0zUZFQ\"]",
+        "CHANNELS_IN_ARRAY": "[\"https://www.youtube.com/@suzume_mikagura/streams\"]",
         "MAX_DOWNLOAD": "1"
       },
       "DockerfileRunArguments": "--env AZURE_STORAGE_CONNECTION_STRING_VTUBER"
