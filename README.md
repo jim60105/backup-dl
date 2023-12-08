@@ -1,7 +1,7 @@
 # backup-dl
 
 [![CodeFactor](https://www.codefactor.io/repository/github/jim60105/backup-dl/badge)](https://www.codefactor.io/repository/github/jim60105/backup-dl)  
-![License](https://img.shields.io/github/license/jim60105/sound-buttons?style=for-the-badge)
+![License](https://img.shields.io/github/license/jim60105/backup-dl?style=for-the-badge)
 ![.NET Core](https://img.shields.io/static/v1?style=for-the-badge&message=.NET+Core&color=512BD4&logo=.NET&logoColor=FFFFFF&label=)
 ![Microsoft Azure](https://img.shields.io/static/v1?style=for-the-badge&message=Microsoft+Azure&color=0078D4&logo=Microsoft+Azure&logoColor=FFFFFF&label=)
 ![Docker](https://img.shields.io/static/v1?style=for-the-badge&message=Docker&color=2496ED&logo=Docker&logoColor=FFFFFF&label=)
@@ -96,7 +96,16 @@ helm install backup-dl . -n backupdl
 
 ## LICENSE
 
-- Distribute main code with MIT License.
-- Use Xabe.FFmpeg with License Agreement under non-commercial use.
-- Use YoutubeDLSharp under BSD 3-Clause License.
-- Use yt-dlp under Unlicensed License.
+> Use Xabe.FFmpeg with License Agreement under non-commercial use.  
+> Use YoutubeDLSharp under BSD 3-Clause License.  
+> Use yt-dlp under Unlicensed License.
+
+<img src="https://github.com/jim60105/backup-dl/assets/16995691/c15741ac-04f9-44e3-b97a-32ecb731c823" alt="open graph" width="200" />
+
+[GNU GENERAL PUBLIC LICENSE Version 3](LICENSE)
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
