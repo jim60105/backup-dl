@@ -118,8 +118,8 @@ namespace backup_dl
                 ytdlProc.OutputReceived += (o, e) => _logger.Verbose(e.Data);
                 ytdlProc.ErrorReceived += (o, e) => _logger.Error(e.Data);
 
-                List<string> ProcessedIds = new();
-                List<Task> tasks = new();
+                List<string> ProcessedIds = [];
+                List<Task> tasks = [];
 
                 // 在執行前呼叫，處理上次未上傳完成的檔案
                 tasks = PostProcess(tempDir, ref ProcessedIds);
@@ -139,10 +139,10 @@ namespace backup_dl
                         optionSet,
                         new CancellationToken()).Wait();
 
-                    tasks = tasks.Concat(PostProcess(tempDir, ref ProcessedIds)).ToList();
+                    tasks = [.. tasks, .. PostProcess(tempDir, ref ProcessedIds)];
                 }
 
-                Task.WaitAll(tasks.ToArray());
+                Task.WaitAll([.. tasks]);
                 _logger.Debug("All tasks are completed. Total time spent: {timeSpent}", (DateTime.Now - startTime).ToString("hh\\:mm\\:ss"));
             }
             catch (Exception e)
@@ -165,7 +165,7 @@ namespace backup_dl
         private static List<Task> PostProcess(string tempDir, ref List<string> ProcessedIds)
         {
             List<string> files = Directory.EnumerateFiles(tempDir, "*.mkv", SearchOption.AllDirectories).ToList();
-            List<Task> tasks = new();
+            List<Task> tasks = [];
 
             // 同步執行
             bool sync = null != Environment.GetEnvironmentVariable("SCYNCHRONOUS");
@@ -489,7 +489,7 @@ namespace backup_dl
                 string imagePathName = Path.Combine(Path.GetDirectoryName(thumbPath), Path.GetFileNameWithoutExtension(thumbPath));
                 string jpgPath = imagePathName + ".jpg";
 
-                string[] extensions = { ".jpeg", ".gif", ".png", ".bmp", ".webp" };
+                string[] extensions = [".jpeg", ".gif", ".png", ".bmp", ".webp"];
                 foreach (var ext in extensions)
                 {
                     string sourceImgPath = imagePathName + ext;
@@ -576,7 +576,7 @@ namespace backup_dl
         private static string GetRelativePath(string fullPath, string basePath)
         {
             // Require trailing backslash for path
-            if (!basePath.EndsWith("\\"))
+            if (!basePath.EndsWith('\\'))
                 basePath += "\\";
 
             Uri baseUri = new(basePath);
