@@ -19,6 +19,8 @@
 docker pull ghcr.io/jim60105/backup-dl:latest
 ```
 
+Also available at [quay.io](https://quay.io/repository/jim60105/backup-dl?tab=tags)
+
 ## 參數
 
 ### 環境變數
