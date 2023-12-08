@@ -7,7 +7,7 @@ RUN apk add --no-cache aria2 ffmpeg python3 &&\
     apk add --no-cache --virtual build-deps musl-dev gcc g++ python3-dev py3-pip &&\
     python3 -m venv /venv && \
     source /venv/bin/activate && \
-    pip install yt-dlp && \
+    pip install --no-cache-dir yt-dlp && \
     pip uninstall -y setuptools pip && \
     apk del build-deps
 
