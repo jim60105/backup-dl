@@ -1,7 +1,6 @@
 ﻿using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using backup_dl.Helper;
-using backup_dl.Models;
 using Serilog;
 using System;
 using System.Collections.Generic;
@@ -15,35 +14,36 @@ using System.Threading.Tasks;
 using Xabe.FFmpeg;
 using YoutubeDLSharp;
 using YoutubeDLSharp.Options;
+using YtdlpVideoData = backup_dl.Models.YtdlpVideoData.ytdlpVideoData;
 
 namespace backup_dl
 {
-    class Program
+    partial class Program
     {
-        private static ILogger logger;
-        private static BlobContainerClient containerClient;
+        private static ILogger _logger;
+        private static BlobContainerClient _containerClient;
 
         public static string YtdlPath { get; set; } = "/usr/bin/yt-dlp";
         private static string CookiesPath { get; set; } = null;
 
-        static void Main(string[] args)
+        static void Main()
         {
             // 建立Logger
             Log.Logger = new LoggerConfiguration()
                             .MinimumLevel.Verbose()
                             .WriteTo.Console()
                             .CreateLogger();
-            logger = Log.Logger;
+            _logger = Log.Logger;
 
             // 計時
             DateTime startTime = DateTime.Now;
-            logger.Information("Start backup-dl {now}", startTime.ToString());
+            _logger.Information("Start backup-dl {now}", startTime.ToString());
 
             // Create a BlobServiceClient object which will be used to create a container client
             // Get the container and return a container client object
             string connectionString = Environment.GetEnvironmentVariable("AZURE_STORAGE_CONNECTION_STRING_VTUBER");
             BlobServiceClient blobServiceClient = new(connectionString);
-            containerClient = blobServiceClient.GetBlobContainerClient("vtuber");
+            _containerClient = blobServiceClient.GetBlobContainerClient("vtuber");
 
             // 取得要下載的連結
             string channelsToDownload = Environment.GetEnvironmentVariable("CHANNELS_IN_ARRAY");
@@ -59,7 +59,7 @@ namespace backup_dl
             try
             {
                 // 取得archive.txt
-                BlobClient archiveBlob = containerClient.GetBlobClient("archive.txt");
+                BlobClient archiveBlob = _containerClient.GetBlobClient("archive.txt");
                 if (archiveBlob.Exists())
                 {
                     _ = archiveBlob.DownloadTo(archivePath);
@@ -111,12 +111,12 @@ namespace backup_dl
                 if (File.Exists("cookies.txt"))
                 {
                     optionSet.Cookies = CookiesPath = Path.GetFullPath("cookies.txt");
-                    logger.Information("Find cookies file.");
+                    _logger.Information("Find cookies file.");
                 }
 
                 YoutubeDLProcess ytdlProc = new(YtdlPath);
-                ytdlProc.OutputReceived += (o, e) => logger.Verbose(e.Data);
-                ytdlProc.ErrorReceived += (o, e) => logger.Error(e.Data);
+                ytdlProc.OutputReceived += (o, e) => _logger.Verbose(e.Data);
+                ytdlProc.ErrorReceived += (o, e) => _logger.Error(e.Data);
 
                 List<string> ProcessedIds = new();
                 List<Task> tasks = new();
@@ -129,11 +129,11 @@ namespace backup_dl
                         .ToList()
                         .Concat(ProcessedIds.Select(id => "youtube " + id + Environment.NewLine)));
 
-                logger.Information("Start download process.");
-                logger.Debug("MAX_DOWNLOAD: {maxDownload}", maxDownload);
+                _logger.Information("Start download process.");
+                _logger.Debug("MAX_DOWNLOAD: {maxDownload}", maxDownload);
                 for (int i = 0; i < maxDownload; i++)
                 {
-                    logger.Debug("Excute times: {excuteTimes}", i + 1);
+                    _logger.Debug("Excute times: {excuteTimes}", i + 1);
                     ytdlProc.RunAsync(
                         channels,
                         optionSet,
@@ -143,11 +143,11 @@ namespace backup_dl
                 }
 
                 Task.WaitAll(tasks.ToArray());
-                logger.Debug("All tasks are completed. Total time spent: {timeSpent}", (DateTime.Now - startTime).ToString("hh\\:mm\\:ss"));
+                _logger.Debug("All tasks are completed. Total time spent: {timeSpent}", (DateTime.Now - startTime).ToString("hh\\:mm\\:ss"));
             }
             catch (Exception e)
             {
-                logger.Error(e, "Unhandled Exception!");
+                _logger.Error(e, "Unhandled Exception!");
             }
             finally
             {
@@ -175,7 +175,7 @@ namespace backup_dl
                 // 剛由ytdl下載完的檔案，檔名為 {id}
                 // 處理完成的檔案，檔名為 {date:yyyyMMdd} {title} ({id}).mkv)}
                 // 此處比對在()中的id
-                Match match = Regex.Match(Path.GetFileNameWithoutExtension(filePath), @"\s\((.*)\)$");
+                Match match = getId().Match(Path.GetFileNameWithoutExtension(filePath));
                 string id = match.Success
                     ? match.Groups[1].Value
                     : Path.GetFileNameWithoutExtension(filePath);
@@ -270,14 +270,14 @@ namespace backup_dl
                         {
                             string newPath = res.Result;
                             AddThumbNailImage(filePath, newPath).Wait();
-                            logger.Information("PostProcess Finish: {path}", res.Result);
+                            _logger.Information("PostProcess Finish: {path}", res.Result);
                             return newPath;
                         });
                 }
                 finalTask = task.ContinueWith((res) =>
                     {
                         string newPath = res.Result;
-                        logger.Information("Start Uploading: {path}", res.Result);
+                        _logger.Information("Start Uploading: {path}", res.Result);
                         Task<bool> task = UploadToAzure(tempDir, newPath, ID: id, duration: duration);
                         task.Wait();
                         return task.IsCompletedSuccessfully && task.Result ? newPath : null;
@@ -289,9 +289,9 @@ namespace backup_dl
                         {
                             File.AppendAllText(archivePath, "youtube " + id + Environment.NewLine);
                             UploadToAzure(tempDir, archivePath, ContentType: "text/plain").Wait();
-                            logger.Information("Task done: {path}", res.Result);
+                            _logger.Information("Task done: {path}", res.Result);
                         }
-                        else logger.Error("Excute Failed: {id}", id);
+                        else _logger.Error("Excute Failed: {id}", id);
                         return newPath;
                     }, TaskContinuationOptions.ExecuteSynchronously);
 
@@ -315,7 +315,7 @@ namespace backup_dl
             try
             {
                 using FileStream fs = new(filePath, FileMode.Open, FileAccess.Read);
-                logger.Debug("Start Upload {path} to azure storage", filePath);
+                _logger.Debug("Start Upload {path} to azure storage", filePath);
                 AccessTier accessTire = isVideo
                                         ? AccessTier.Archive
                                         : AccessTier.Hot;
@@ -324,14 +324,14 @@ namespace backup_dl
 
                 double percentage = 0;
                 Dictionary<string, string> tags =
-                    (null == ID || null == duration)
+                    null == ID || null == duration
                     ? new()
                     : new()
                     {
                             { "id", ID },
                             { "duration", duration?.ToString() }
                     };
-                BlobClient blobClient = containerClient.GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}");
+                BlobClient blobClient = _containerClient.GetBlobClient($"{GetRelativePath(filePath, Path.Combine(tempDir, "backup-dl"))}");
 
                 if (await blobClient.ExistsAsync())
                 {
@@ -339,14 +339,14 @@ namespace backup_dl
                     // 為Archive tier時刪除再寫
                     if (blobProperties.AccessTier == AccessTier.Archive)
                     {
-                        logger.Warning("Blob is in archive tier! Deleting {blob}", blobClient.Name);
+                        _logger.Warning("Blob is in archive tier! Deleting {blob}", blobClient.Name);
                         await blobClient.DeleteAsync();
                         await WaitUntilBlobDeletedAsync(blobClient, TimeSpan.FromSeconds(60));
-                        logger.Information("Blob Deleted! {blob}", blobClient.Name);
+                        _logger.Information("Blob Deleted! {blob}", blobClient.Name);
                     }
                     else
                     {
-                        logger.Warning("Blob already exists! Overwriting {blob}", blobClient.Name);
+                        _logger.Warning("Blob already exists! Overwriting {blob}", blobClient.Name);
                     }
                 }
 
@@ -357,16 +357,16 @@ namespace backup_dl
                     metadata: tags,
                     progressHandler: new Progress<long>(progress =>
                     {
-                        double _percentage = Math.Round(((double)progress) / fileSize * 100);
+                        double _percentage = Math.Round((double)progress / fileSize * 100);
                         if (_percentage != percentage)
                         {
                             percentage = _percentage;
-                            logger.Verbose("Uploading...{progress}% {path}", _percentage, filePath);
+                            _logger.Verbose("Uploading...{progress}% {path}", _percentage, filePath);
                         }
                     })
                 );
                 _ = await blobClient.SetTagsAsync(tags);
-                logger.Debug("Finish Upload {path} to azure storage", filePath);
+                _logger.Debug("Finish Upload {path} to azure storage", filePath);
 
                 if (isVideo) File.Delete(filePath);
                 return true;
@@ -380,8 +380,8 @@ namespace backup_dl
                 }
                 else
                 {
-                    logger.Error("Upload Failed: {fileName}", Path.GetFileName(filePath));
-                    logger.Error("{errorMessage}", e.Message);
+                    _logger.Error("Upload Failed: {fileName}", Path.GetFileName(filePath));
+                    _logger.Error("{errorMessage}", e.Message);
                     return false;
                 }
             }
@@ -393,7 +393,7 @@ namespace backup_dl
                 {
                     if (DateTime.UtcNow - startTime > timeout)
                     {
-                        logger.Warning("Timeout waiting for blob to be deleted. Delete it again.");
+                        _logger.Warning("Timeout waiting for blob to be deleted. Delete it again.");
                         await blobClient.DeleteAsync();
                         startTime = DateTime.UtcNow;
                     }
@@ -428,18 +428,18 @@ namespace backup_dl
                 }
                 catch (PathTooLongException)
                 {
-                    logger.Warning("The path is too long! Reduce the maximum title length by half.");
+                    _logger.Warning("The path is too long! Reduce the maximum title length by half.");
                     maxLength /= 2;
                     newPath = calcPathAndMoveFile();
                 }
 
-                logger.Debug("Rename file: {oldPath} => {newPath}", oldPath, newPath);
+                _logger.Debug("Rename file: {oldPath} => {newPath}", oldPath, newPath);
                 return newPath;
             }
             catch (Exception e)
             {
-                logger.Error("File name calculate failed! {oldPath}, {newPath}, {title}, {date}", oldPath, newPath, title, date);
-                logger.Error(e.Message);
+                _logger.Error("File name calculate failed! {oldPath}, {newPath}, {title}, {date}", oldPath, newPath, title, date);
+                _logger.Error(e.Message);
                 throw;
             }
 
@@ -495,12 +495,12 @@ namespace backup_dl
                     string sourceImgPath = imagePathName + ext;
                     if (File.Exists(sourceImgPath))
                     {
-                        logger.Debug("start Convert thumbnail format {ext}: {jpgPath}", ext, jpgPath);
+                        _logger.Debug("start Convert thumbnail format {ext}: {jpgPath}", ext, jpgPath);
                         IConversion conversion = new Conversion().AddParameter($" -i \"{sourceImgPath}\" ")
                                                                  .SetOutput(jpgPath);
-                        logger.Debug(conversion.Build());
+                        _logger.Debug(conversion.Build());
                         _ = await conversion.Start();
-                        logger.Debug("Finish Convert thumbnail format {ext}: {jpgPath}", ext, jpgPath);
+                        _logger.Debug("Finish Convert thumbnail format {ext}: {jpgPath}", ext, jpgPath);
                         break;
                     }
                 }
@@ -510,12 +510,12 @@ namespace backup_dl
                     string tempPath = Path.GetTempFileName();
 
                     //FFmpeg method
-                    logger.Debug("Start Embed thumbnail: {path}", filePath);
+                    _logger.Debug("Start Embed thumbnail: {path}", filePath);
                     IConversion conversion = new Conversion().AddParameter($" -i \"{filePath}\" -y -codec copy", ParameterPosition.PreInput)
                                                              .AddParameter($" -attach \"{jpgPath}\" -map 0 -metadata:s:t:0 mimetype=image/jpeg -metadata:s:t:0 filename=cover.jpg ", ParameterPosition.PreInput)
-                                                             .SetOutputFormat(Xabe.FFmpeg.Format.matroska)
+                                                             .SetOutputFormat(Format.matroska)
                                                              .SetOutput(tempPath);
-                    logger.Debug("FFmpeg arguments: {arguments}", conversion.Build());
+                    _logger.Debug("FFmpeg arguments: {arguments}", conversion.Build());
                     _ = await conversion.Start();
 
                     ////AtomicParsley method(Only works with mp3/ mp4 / m4a)
@@ -531,10 +531,10 @@ namespace backup_dl
 
                     File.Delete(filePath);
                     File.Move(tempPath, filePath);
-                    logger.Debug("Finish Embed thumbnail: {path}", filePath);
+                    _logger.Debug("Finish Embed thumbnail: {path}", filePath);
                 }
             }
-            catch (InvalidOperationException) { logger.Error("Xabe.FFmpeg is dead in AddThumbNailImage"); }
+            catch (InvalidOperationException) { _logger.Error("Xabe.FFmpeg is dead in AddThumbNailImage"); }
         }
 
         /// <summary>
@@ -556,19 +556,19 @@ namespace backup_dl
                 string description = video.Description;
 
                 var tempPath = Path.GetTempFileName();
-                logger.Debug("Start Add matadata: {path}", filePath);
+                _logger.Debug("Start Add matadata: {path}", filePath);
                 IConversion conversion = new Conversion().AddParameter($"-i \"{filePath}\" -y -codec copy -map 0", ParameterPosition.PreInput)
                                                          .AddParameter($"-metadata title=\"{title}\" -metadata artist=\"{artist}\" -metadata date=\"{date:u}\" -metadata description=\"{description}\" -metadata comment=\"{description}\"", ParameterPosition.PreInput)
-                                                         .SetOutputFormat(Xabe.FFmpeg.Format.matroska)
+                                                         .SetOutputFormat(Format.matroska)
                                                          .SetOutput(tempPath);
-                logger.Debug("FFmpeg arguments: {arguments}", conversion.Build());
+                _logger.Debug("FFmpeg arguments: {arguments}", conversion.Build());
                 _ = await conversion.Start();
 
                 File.Delete(filePath);
                 File.Move(tempPath, filePath);
-                logger.Debug("Finish Add matadata: {path}", filePath);
+                _logger.Debug("Finish Add matadata: {path}", filePath);
             }
-            catch (InvalidOperationException) { logger.Error("Xabe.FFmpeg is dead in AddMetaData"); }
+            catch (InvalidOperationException) { _logger.Error("Xabe.FFmpeg is dead in AddMetaData"); }
         }
 
         // https://weblog.west-wind.com/posts/2010/Dec/20/Finding-a-Relative-Path-in-NET
@@ -587,5 +587,8 @@ namespace backup_dl
             // Uri's use forward slashes so convert back to backward slashes
             return Uri.UnescapeDataString(relativeUri.ToString()).Replace("/", "\\");
         }
+
+        [GeneratedRegex("\\s\\((.*)\\)$")]
+        private static partial Regex getId();
     }
 }

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using YoutubeDLSharp;
 using YoutubeDLSharp.Helpers;
 using YoutubeDLSharp.Options;
+using YtdlpVideoData = backup_dl.Models.YtdlpVideoData.ytdlpVideoData;
 
 namespace backup_dl.Helper;
 
