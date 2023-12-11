@@ -1,6 +1,6 @@
 # backup-dl
 
-[![CodeFactor](https://www.codefactor.io/repository/github/jim60105/backup-dl/badge)](https://www.codefactor.io/repository/github/jim60105/backup-dl)  
+[![CodeFactor](https://www.codefactor.io/repository/github/jim60105/backup-dl/badge?style=for-the-badge)](https://www.codefactor.io/repository/github/jim60105/backup-dl)  
 ![License](https://img.shields.io/github/license/jim60105/backup-dl?style=for-the-badge)
 ![.NET Core](https://img.shields.io/static/v1?style=for-the-badge&message=.NET+Core&color=512BD4&logo=.NET&logoColor=FFFFFF&label=)
 ![Microsoft Azure](https://img.shields.io/static/v1?style=for-the-badge&message=Microsoft+Azure&color=0078D4&logo=Microsoft+Azure&logoColor=FFFFFF&label=)

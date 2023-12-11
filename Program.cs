@@ -4,6 +4,7 @@ using backup_dl.Helper;
 using Serilog;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -23,9 +24,13 @@ namespace backup_dl
         private static ILogger _logger;
         private static BlobContainerClient _containerClient;
 
-        public static string YtdlPath { get; set; } = "/usr/bin/yt-dlp";
+        public static string YtdlPath { get; set; } = "/venv/bin/yt-dlp";
         private static string CookiesPath { get; set; } = null;
 
+        [UnconditionalSuppressMessage(
+            "Trimming",
+            "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code",
+            Justification = $"{nameof(SourceGenerationContext)} is set.")]
         static void Main()
         {
             // 建立Logger
@@ -47,7 +52,12 @@ namespace backup_dl
 
             // 取得要下載的連結
             string channelsToDownload = Environment.GetEnvironmentVariable("CHANNELS_IN_ARRAY");
-            string[] channels = JsonSerializer.Deserialize<string[]>(channelsToDownload);
+            string[] channels = JsonSerializer.Deserialize<string[]>(
+                channelsToDownload,
+                options: new()
+                {
+                    TypeInfoResolver = SourceGenerationContext.Default
+                });
 
             // TempPath
             string tempDir = Path.Combine(Path.GetTempPath(), "backup-dl");
@@ -175,7 +185,7 @@ namespace backup_dl
                 // 剛由ytdl下載完的檔案，檔名為 {id}
                 // 處理完成的檔案，檔名為 {date:yyyyMMdd} {title} ({id}).mkv)}
                 // 此處比對在()中的id
-                Match match = getId().Match(Path.GetFileNameWithoutExtension(filePath));
+                Match match = GetId().Match(Path.GetFileNameWithoutExtension(filePath));
                 string id = match.Success
                     ? match.Groups[1].Value
                     : Path.GetFileNameWithoutExtension(filePath);
@@ -589,6 +599,6 @@ namespace backup_dl
         }
 
         [GeneratedRegex("\\s\\((.*)\\)$")]
-        private static partial Regex getId();
+        private static partial Regex GetId();
     }
 }

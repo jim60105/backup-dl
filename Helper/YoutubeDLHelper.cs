@@ -1,6 +1,7 @@
-﻿using backup_dl.Models;
+﻿using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Reflection;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,7 +14,6 @@ namespace backup_dl.Helper;
 
 internal static partial class YoutubeDL
 {
-#nullable disable
     /// <summary>
     /// Modified from YoutubeDL.RunVideoDataFetch()
     /// </summary>
@@ -23,6 +23,10 @@ internal static partial class YoutubeDL
     /// <param name="flat"></param>
     /// <param name="overrideOptions"></param>
     /// <returns></returns>
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2026:Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code",
+        Justification = $"{nameof(SourceGenerationContext)} is set.")]
 #pragma warning disable CA1068 // CancellationToken 參數必須位於最後
     public static async Task<RunResult<YtdlpVideoData>> RunVideoDataFetch_Alt(this YoutubeDLSharp.YoutubeDL ytdl,
             string url,
@@ -32,7 +36,6 @@ internal static partial class YoutubeDL
             OptionSet overrideOptions = null)
 #pragma warning restore CA1068 // CancellationToken 參數必須位於最後
     {
-#pragma warning disable IDE0017 // 簡化物件初始化
         OptionSet opts = new()
         {
             IgnoreErrors = ytdl.IgnoreDownloadErrors,
@@ -46,13 +49,11 @@ internal static partial class YoutubeDL
             NoOverwrites = !ytdl.OverwriteFiles,
             NoPart = true,
             FfmpegLocation = Utils.GetFullPath(ytdl.FFmpegPath),
-            Exec = "echo outfile: {}"
+            Exec = "echo outfile: {}",
+            DumpSingleJson = true,
+            FlatPlaylist = flat,
+            WriteComments = fetchComments
         };
-
-        opts.DumpSingleJson = true;
-        opts.FlatPlaylist = flat;
-        opts.WriteComments = fetchComments;
-#pragma warning restore IDE0017 // 簡化物件初始化
         if (overrideOptions != null)
         {
             opts = opts.OverrideOptions(overrideOptions);
@@ -68,10 +69,15 @@ internal static partial class YoutubeDL
                              .Replace("True", "true");
             // Change json string from 'sth' to "sth"
             data = ChangeJsonStringSingleQuotesToDoubleQuotes().Replace(data, @"""$1""");
-            videoData = Newtonsoft.Json.JsonConvert.DeserializeObject<YtdlpVideoData>(data);
+            videoData = JsonSerializer.Deserialize<YtdlpVideoData>(
+                data,
+                options: new()
+                {
+                    TypeInfoResolver = SourceGenerationContext.Default
+                });
         };
         FieldInfo fieldInfo = typeof(YoutubeDLSharp.YoutubeDL).GetField("runner", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.GetField | BindingFlags.SetField);
-        (int code, string[] errors) = await (fieldInfo.GetValue(ytdl) as ProcessRunner).RunThrottled(youtubeDLProcess, new[] { url }, opts, ct);
+        (int code, string[] errors) = await (fieldInfo.GetValue(ytdl) as ProcessRunner).RunThrottled(youtubeDLProcess, [url], opts, ct);
         return new RunResult<YtdlpVideoData>(code == 0, errors, videoData);
     }
 #nullable enable 
