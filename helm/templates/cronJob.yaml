@@ -24,8 +24,8 @@ spec:
               capabilities:
                 drop:
                 - ALL
-              runAsGroup: 1000
-              runAsUser: 1000
+              runAsGroup: 1654
+              runAsUser: 1654
               seccompProfile:
                 type: RuntimeDefault
             volumeMounts:

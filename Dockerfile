@@ -49,6 +49,7 @@ FROM base AS final
 
 ENV PATH="/app:$PATH"
 
+RUN mkdir -p /app && chown -R $APP_UID:$APP_UID /app && chmod u+rwx /app
 COPY --from=publish --chown=$APP_UID:$APP_UID /app/publish/backup-dl /app/backup-dl
 
 USER $APP_UID
