@@ -118,10 +118,12 @@ namespace backup_dl
                 }
 
                 // 讀出cookies.txt
-                if (File.Exists("cookies.txt"))
+                FileInfo cookies = new("cookies.txt");
+                if (cookies.Exists)
                 {
-                    optionSet.Cookies = CookiesPath = Path.GetFullPath("cookies.txt");
-                    _logger.Information("Find cookies file.");
+                    _logger.Information("Detected {cookies}, use it for yt-dlp", cookies.FullName);
+                    var bak = cookies.CopyTo("cookies.copy.txt", true);
+                    optionSet.Cookies = CookiesPath = bak.FullName;
                 }
 
                 YoutubeDLProcess ytdlProc = new(YtdlPath);

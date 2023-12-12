@@ -15,13 +15,9 @@ spec:
             runAsNonRoot: true
           containers:
           - name: backupdl
-            command:
-            - /bin/sh
-            - -c
-            - cp /cookies.txt /app/cookies.txt && dotnet /app/backup-dl.dll
             env:
 {{ .Values.env | toYaml | indent 14 }}
-            image: ghcr.io/jim60105/backup-dl
+            image: ghcr.io/jim60105/backup-dl:latest
             imagePullPolicy: Always
             securityContext:
               allowPrivilegeEscalation: false
@@ -33,7 +29,7 @@ spec:
               seccompProfile:
                 type: RuntimeDefault
             volumeMounts:
-            - mountPath: /cookies.txt
+            - mountPath: /app/cookies.txt
               name: cookies
               subPath: cookies.txt
           restartPolicy: Never
