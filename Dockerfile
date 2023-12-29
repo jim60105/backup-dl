@@ -15,6 +15,7 @@ RUN apk add --no-cache aria2 ffmpeg python3 && \
 ENV AZURE_STORAGE_CONNECTION_STRING_VTUBER="ChangeThis"
 ENV CHANNELS_IN_ARRAY="[\"https://www.youtube.com/channel/UCBC7vYFNQoGPupe5NxPG4Bw\"]"
 ENV MAX_DOWNLOAD="10"
+ENV DATE_BEFORE="2"
 ENV PATH="/venv/bin:$PATH"
 
 ### Debug image

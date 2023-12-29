@@ -21,3 +21,5 @@ env:
     value: DefaultEndpointsProtocol=https;AccountName=myaccount;AccountKey=ooxxooxx;EndpointSuffix=core.windows.net
   - name: MAX_DOWNLOAD
     value: "10"
+  - name: DATE_BEFORE
+    value: "2"

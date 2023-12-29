@@ -78,6 +78,8 @@ namespace backup_dl
                     _ = UploadToAzure(tempDir, oldArchivePath, ContentType: "text/plain");
                 }
 
+                int dateBefore = int.TryParse(Environment.GetEnvironmentVariable("DATE_BEFORE"), out dateBefore) ? dateBefore : 2;
+
                 OptionSet optionSet = new()
                 {
                     IgnoreConfig = true,
@@ -95,7 +97,7 @@ namespace backup_dl
                     NoResizeBuffer = true,
                     WriteThumbnail = true,
                     NoColors = true,
-                    DateBefore = DateTime.UtcNow.AddDays(-1),
+                    DateBefore = DateTime.UtcNow.AddDays(-1 * dateBefore),
                     MatchFilters = "!is_live",
                     PreferFreeFormats = true
                     //WriteInfoJson = true,
