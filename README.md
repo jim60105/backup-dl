@@ -28,7 +28,7 @@ Also available at [quay.io](https://quay.io/repository/jim60105/backup-dl?tab=ta
 - `AZURE_STORAGE_CONNECTION_STRING_VTUBER`: Azure Blob Storage的連接字串
 - `CHANNELS_IN_ARRAY`: 欲下載的頻道網址，以陣列傳入
 - `MAX_DOWNLOAD`: (可選)每次執行的最大下載數量，預設為10
-- `DATE_BEFORE`: (可選)
+- `DATE_BEFORE`: (可選)僅下載幾日前的影片，以避免影片尚未完成轉檔
 - `FORMAT`: (可選)自訂欲下載的格式，預設為`(bv*+ba/b)[protocol^=http][protocol!*=dash]`，請參考[yt-dlp說明文件](https://github.com/yt-dlp/yt-dlp#format-selection)
 - `SCYNCHRONOUS`: (可選)以同步的方式執行程式，請只在單執行緒機器使用
 
