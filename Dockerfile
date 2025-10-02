@@ -1,15 +1,26 @@
-#See https://aka.ms/containerfastmode to understand how Visual Studio uses this Dockerfile to build your images for faster debugging.
-
-### Base image for yt-dlp
-FROM mcr.microsoft.com/dotnet/runtime-deps:8.0-alpine AS base
+# syntax=docker/dockerfile:1
 ARG UID=1001
 ARG YT_DLP_VERSION=2025.08.22
+
+#See https://aka.ms/containerfastmode to understand how Visual Studio uses this Dockerfile to build your images for faster debugging.
+
+########################################
+# Base image for yt-dlp
+########################################
+FROM mcr.microsoft.com/dotnet/runtime-deps:8.0-alpine AS base
+ARG UID
+ARG YT_DLP_VERSION
 WORKDIR /app
 
-RUN apk add --no-cache aria2 ffmpeg && \
-    mkdir -p /usr/bin /etc/yt-dlp-plugins/bgutil-ytdlp-pot-provider && \
-    chown -R $UID:0 /etc/yt-dlp-plugins && \
-    chmod -R 775 /etc/yt-dlp-plugins
+# Install aria2
+RUN apk add --no-cache aria2
+
+# Create directories with correct permissions
+RUN install -d -m 775 -o $UID -g 0 /etc/yt-dlp-plugins/bgutil-ytdlp-pot-provider
+
+# ffmpeg (statically compiled and UPX compressed)
+COPY --link --chown=$UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.0 /ffmpeg /usr/bin/
+COPY --link --chown=$UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.0 /ffprobe /usr/bin/
 
 # Copy POToken server (bgutil-pot) from ghcr.io/jim60105/bgutil-pot:latest
 COPY --link --chown=$UID:0 --chmod=775 --from=ghcr.io/jim60105/bgutil-pot:latest /bgutil-pot /usr/bin/
@@ -24,18 +35,24 @@ ENV AZURE_STORAGE_CONNECTION_STRING_VTUBER="ChangeThis"
 ENV CHANNELS_IN_ARRAY="[\"https://www.youtube.com/channel/UCBC7vYFNQoGPupe5NxPG4Bw\"]"
 ENV MAX_DOWNLOAD="10"
 ENV DATE_BEFORE="2"
-ENV PATH="/usr/bin:$PATH"
 
-### Debug image
+########################################
+# Debug image
+########################################
 FROM mcr.microsoft.com/dotnet/runtime:8.0-alpine AS debug
-ARG UID=1001
-ARG YT_DLP_VERSION=2025.08.22
+ARG UID
+ARG YT_DLP_VERSION
 WORKDIR /app
 
-RUN apk add --no-cache aria2 ffmpeg && \
-    mkdir -p /usr/bin /etc/yt-dlp-plugins/bgutil-ytdlp-pot-provider && \
-    chown -R $UID:0 /etc/yt-dlp-plugins && \
-    chmod -R 775 /etc/yt-dlp-plugins
+# Install aria2
+RUN apk add --no-cache aria2
+
+# Create directories with correct permissions
+RUN install -d -m 775 -o $UID -g 0 /etc/yt-dlp-plugins/bgutil-ytdlp-pot-provider
+
+# ffmpeg (statically compiled and UPX compressed)
+COPY --link --chown=$UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.0 /ffmpeg /usr/bin/
+COPY --link --chown=$UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.0 /ffprobe /usr/bin/
 
 # Copy POToken server (bgutil-pot) from ghcr.io/jim60105/bgutil-pot:latest
 COPY --link --chown=$UID:0 --chmod=775 --from=ghcr.io/jim60105/bgutil-pot:latest /bgutil-pot /usr/bin/
@@ -46,9 +63,9 @@ COPY --link --chown=$UID:0 --chmod=775 --from=ghcr.io/jim60105/bgutil-pot:latest
 # Download pre-built yt-dlp binary
 ADD --link --chown=$UID:0 --chmod=775 https://github.com/yt-dlp/yt-dlp/releases/download/${YT_DLP_VERSION}/yt-dlp_linux /usr/bin/yt-dlp
 
-ENV PATH="/usr/bin:$PATH"
-
-### Build .NET
+########################################
+# Build .NET
+########################################
 FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build
 ARG BUILD_CONFIGURATION=Release
 ARG TARGETARCH
@@ -62,15 +79,19 @@ ARG BUILD_CONFIGURATION=Release
 COPY . .
 RUN dotnet publish "backup-dl.csproj" -a $TARGETARCH -c $BUILD_CONFIGURATION -o /app/publish --self-contained true
 
-### Final image
+########################################
+# Final image
+########################################
 FROM base AS final
-ARG UID=1001
+ARG APP_UID=1654
 
 ENV PATH="/app:$PATH"
 
-RUN mkdir -p /app && chown -R $UID:0 /app && chmod u+rwx /app
-COPY --from=publish --chown=$UID:0 /app/publish/backup-dl /app/backup-dl
+# Create directories with correct permissions
+RUN install -d -m 775 -o $APP_UID -g 0 /app
 
-USER $UID
+COPY --from=publish --chown=$APP_UID:0 /app/publish/backup-dl /app/backup-dl
+
+USER $APP_UID
 
 ENTRYPOINT ["/app/backup-dl"]
