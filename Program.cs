@@ -85,7 +85,6 @@ namespace backup_dl
                     IgnoreConfig = true,
                     // Download best video available via direct link over HTTP/HTTPS protocol
                     Format = Environment.GetEnvironmentVariable("FORMAT") ?? "(bv*+ba/b)[protocol^=http][protocol!*=dash]",
-                    ExtractorArgs = "youtube:skip=dash",
                     IgnoreErrors = true,
                     NoAbortOnError = true,
                     MergeOutputFormat = DownloadMergeFormat.Mkv,
@@ -96,7 +95,7 @@ namespace backup_dl
                     DownloaderArgs = "-j 16 --retry-wait 10 --max-tries 10 --enable-color=false",
                     NoResizeBuffer = true,
                     WriteThumbnail = true,
-                    NoColors = true,
+                    Color = "no_color",
                     DateBefore = DateTime.UtcNow.AddDays(-1 * dateBefore),
                     MatchFilters = "!is_live",
                     PreferFreeFormats = true
