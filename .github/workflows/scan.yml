@@ -1,4 +1,6 @@
 name: scan
+permissions:
+  contents: read
 
 on:
   workflow_run:
