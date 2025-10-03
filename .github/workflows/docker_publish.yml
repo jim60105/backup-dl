@@ -1,4 +1,6 @@
 name: docker_publish 
+permissions:
+  contents: read
 
 # Controls when the action will run. 
 on:
