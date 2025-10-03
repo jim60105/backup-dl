@@ -24,7 +24,7 @@ namespace backup_dl
         private static ILogger _logger;
         private static BlobContainerClient _containerClient;
 
-        public static string YtdlPath { get; set; } = "/venv/bin/yt-dlp";
+        public static string YtdlPath { get; set; } = "/usr/bin/yt-dlp";
         private static string CookiesPath { get; set; } = null;
 
         [UnconditionalSuppressMessage(
