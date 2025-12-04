@@ -22,14 +22,17 @@ RUN install -d -m 775 -o $APP_UID -g 0 /etc/yt-dlp-plugins/bgutil-ytdlp-pot-prov
 COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.0 /ffmpeg /usr/bin/
 COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.0 /ffprobe /usr/bin/
 
+# dumb-init
+COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.0 /dumb-init /usr/bin/
+
 # Copy POToken server (bgutil-pot) from ghcr.io/jim60105/bgutil-pot:latest
 COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/bgutil-pot:latest /bgutil-pot /usr/bin/
 
 # Copy POToken client plugin from ghcr.io/jim60105/bgutil-pot:latest
 COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/bgutil-pot:latest /client /etc/yt-dlp-plugins/bgutil-ytdlp-pot-provider
 
-# Download pre-built yt-dlp binary
-ADD --link --chown=$APP_UID:0 --chmod=775 https://github.com/yt-dlp/yt-dlp/releases/download/${YT_DLP_VERSION}/yt-dlp_linux /usr/bin/yt-dlp
+# yt-dlp (using musllinux build for compatibility with musl libc from Alpine)
+ADD --link --chown=$APP_UID:0 --chmod=775 https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_musllinux /usr/bin/yt-dlp
 
 ENV AZURE_STORAGE_CONNECTION_STRING_VTUBER="ChangeThis"
 ENV CHANNELS_IN_ARRAY="[\"https://www.youtube.com/channel/UCBC7vYFNQoGPupe5NxPG4Bw\"]"
@@ -94,4 +97,5 @@ COPY --from=publish --chown=$APP_UID:0 /app/publish/backup-dl /app/backup-dl
 
 USER $APP_UID
 
-ENTRYPOINT ["/app/backup-dl"]
+# Use dumb-init as PID 1 to handle signals properly
+ENTRYPOINT [ "dumb-init", "--", "/app/backup-dl"]
