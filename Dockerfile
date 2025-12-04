@@ -13,8 +13,13 @@ WORKDIR /app
 # Install aria2
 RUN apk add --no-cache aria2
 
+COPY --link --chown=$APP_UID:0 --chmod=775 --from=docker.io/denoland/deno:distroless-2.5.6 /lib/*-linux-gnu/* /usr/local/lib/
+
 # Create directories with correct permissions
-RUN install -d -m 775 -o $APP_UID -g 0 /etc/yt-dlp-plugins/bgutil-ytdlp-pot-provider
+RUN install -d -m 775 -o $APP_UID -g 0 /etc/yt-dlp-plugins/bgutil-ytdlp-pot-provider && \
+    install -d -m 775 -o $APP_UID -g 0 /deno-dir && \
+    install -d -m 775 -o $APP_UID -g 0 /lib64 && \
+    ln -s /usr/local/lib/ld-linux-* /lib64/
 
 # ffmpeg (statically compiled and UPX compressed)
 COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.0 /ffmpeg /usr/bin/
@@ -32,6 +37,16 @@ COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/bgutil-pot:la
 # yt-dlp (using musllinux build for compatibility with musl libc from Alpine)
 ADD --link --chown=$APP_UID:0 --chmod=775 https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_musllinux /usr/bin/yt-dlp
 
+# Deno JS runtime for yt-dlp
+ENV LD_LIBRARY_PATH="/usr/local/lib"
+ENV DENO_USE_CGROUPS=1
+ENV DENO_DIR /deno-dir/
+ENV DENO_INSTALL_ROOT /usr/local
+
+ARG DENO_VERSION
+ENV DENO_VERSION=2.5.6
+COPY --link --chown=$APP_UID:0 --chmod=775 --from=docker.io/denoland/deno:distroless-2.5.6 /bin/deno /usr/bin/
+
 ENV AZURE_STORAGE_CONNECTION_STRING_VTUBER="ChangeThis"
 ENV CHANNELS_IN_ARRAY="[\"https://www.youtube.com/channel/UCBC7vYFNQoGPupe5NxPG4Bw\"]"
 ENV MAX_DOWNLOAD="10"
@@ -47,8 +62,13 @@ WORKDIR /app
 # Install aria2
 RUN apk add --no-cache aria2
 
+COPY --link --chown=$APP_UID:0 --chmod=775 --from=docker.io/denoland/deno:distroless-2.5.6 /lib/*-linux-gnu/* /usr/local/lib/
+
 # Create directories with correct permissions
-RUN install -d -m 775 -o $APP_UID -g 0 /etc/yt-dlp-plugins/bgutil-ytdlp-pot-provider
+RUN install -d -m 775 -o $APP_UID -g 0 /etc/yt-dlp-plugins/bgutil-ytdlp-pot-provider && \
+    install -d -m 775 -o $APP_UID -g 0 /deno-dir && \
+    install -d -m 775 -o $APP_UID -g 0 /lib64 && \
+    ln -s /usr/local/lib/ld-linux-* /lib64/
 
 # ffmpeg (statically compiled and UPX compressed)
 COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.0 /ffmpeg /usr/bin/
@@ -62,6 +82,15 @@ COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/bgutil-pot:la
 
 # yt-dlp (using musllinux build for compatibility with musl libc from Alpine)
 ADD --link --chown=$APP_UID:0 --chmod=775 https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_musllinux /usr/bin/yt-dlp
+
+ENV LD_LIBRARY_PATH="/usr/local/lib"
+ENV DENO_USE_CGROUPS=1
+ENV DENO_DIR /deno-dir/
+ENV DENO_INSTALL_ROOT /usr/local
+
+ARG DENO_VERSION
+ENV DENO_VERSION=2.5.6
+COPY --link --chown=$APP_UID:0 --chmod=775 --from=docker.io/denoland/deno:distroless-2.5.6 /bin/deno /usr/bin/
 
 ########################################
 # Build .NET
