@@ -1,6 +1,5 @@
 # syntax=docker/dockerfile:1
 ARG APP_UID=1654
-ARG YT_DLP_VERSION=2025.08.22
 
 #See https://aka.ms/containerfastmode to understand how Visual Studio uses this Dockerfile to build your images for faster debugging.
 
@@ -9,7 +8,6 @@ ARG YT_DLP_VERSION=2025.08.22
 ########################################
 FROM mcr.microsoft.com/dotnet/runtime-deps:8.0-alpine AS base
 ARG APP_UID
-ARG YT_DLP_VERSION
 WORKDIR /app
 
 # Install aria2
@@ -44,7 +42,6 @@ ENV DATE_BEFORE="2"
 ########################################
 FROM mcr.microsoft.com/dotnet/runtime:8.0-alpine AS debug
 ARG APP_UID
-ARG YT_DLP_VERSION
 WORKDIR /app
 
 # Install aria2
@@ -63,8 +60,8 @@ COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/bgutil-pot:la
 # Copy POToken client plugin from ghcr.io/jim60105/bgutil-pot:latest
 COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/bgutil-pot:latest /client /etc/yt-dlp-plugins/bgutil-ytdlp-pot-provider
 
-# Download pre-built yt-dlp binary
-ADD --link --chown=$APP_UID:0 --chmod=775 https://github.com/yt-dlp/yt-dlp/releases/download/${YT_DLP_VERSION}/yt-dlp_linux /usr/bin/yt-dlp
+# yt-dlp (using musllinux build for compatibility with musl libc from Alpine)
+ADD --link --chown=$APP_UID:0 --chmod=775 https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_musllinux /usr/bin/yt-dlp
 
 ########################################
 # Build .NET
