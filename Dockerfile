@@ -83,7 +83,7 @@ COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/bgutil-pot:la
 # yt-dlp (using musllinux build for compatibility with musl libc from Alpine)
 ADD --link --chown=$APP_UID:0 --chmod=775 https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_musllinux /usr/bin/yt-dlp
 
-ENV LD_LIBRARY_PATH="/usr/local/lib"
+ENV LD_LIBRARY_PATH="/usr/local/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 ENV DENO_USE_CGROUPS=1
 ENV DENO_DIR=/deno-dir/
 ENV DENO_INSTALL_ROOT=/usr/local
