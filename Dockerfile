@@ -40,8 +40,8 @@ ADD --link --chown=$APP_UID:0 --chmod=775 https://github.com/yt-dlp/yt-dlp/relea
 # Deno JS runtime for yt-dlp
 ENV LD_LIBRARY_PATH="/usr/local/lib"
 ENV DENO_USE_CGROUPS=1
-ENV DENO_DIR /deno-dir/
-ENV DENO_INSTALL_ROOT /usr/local
+ENV DENO_DIR=/deno-dir/
+ENV DENO_INSTALL_ROOT=/usr/local
 
 ARG DENO_VERSION
 ENV DENO_VERSION=2.5.6
@@ -85,8 +85,8 @@ ADD --link --chown=$APP_UID:0 --chmod=775 https://github.com/yt-dlp/yt-dlp/relea
 
 ENV LD_LIBRARY_PATH="/usr/local/lib"
 ENV DENO_USE_CGROUPS=1
-ENV DENO_DIR /deno-dir/
-ENV DENO_INSTALL_ROOT /usr/local
+ENV DENO_DIR=/deno-dir/
+ENV DENO_INSTALL_ROOT=/usr/local
 
 ARG DENO_VERSION
 ENV DENO_VERSION=2.5.6
