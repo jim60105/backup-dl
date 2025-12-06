@@ -1,127 +1,155 @@
 # syntax=docker/dockerfile:1
+ARG VERSION=EDGE
+ARG RELEASE=0
+
+########################################
+# Base stage
+########################################
+FROM mcr.microsoft.com/dotnet/runtime-deps:8.0 AS base
 ARG APP_UID=1654
-
-#See https://aka.ms/containerfastmode to understand how Visual Studio uses this Dockerfile to build your images for faster debugging.
-
-########################################
-# Base image for yt-dlp
-########################################
-FROM mcr.microsoft.com/dotnet/runtime-deps:8.0-alpine AS base
-ARG APP_UID
+ARG TARGETARCH
+ARG TARGETVARIANT
 WORKDIR /app
 
 # Install aria2
-RUN apk add --no-cache aria2
+RUN --mount=type=cache,id=apt-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/cache/apt \
+    --mount=type=cache,id=aptlists-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/lib/apt/lists \
+    apt-get update && apt-get install -y --no-install-recommends aria2
 
-COPY --link --chown=$APP_UID:0 --chmod=775 --from=docker.io/denoland/deno:distroless-2.5.6 /lib/*-linux-gnu/* /usr/local/lib/
-
-# Create directories with correct permissions
-RUN install -d -m 775 -o $APP_UID -g 0 /etc/yt-dlp-plugins/bgutil-ytdlp-pot-provider && \
-    install -d -m 775 -o $APP_UID -g 0 /deno-dir && \
-    install -d -m 775 -o $APP_UID -g 0 /lib64 && \
-    ln -s /usr/local/lib/ld-linux-* /lib64/
+# Create directories with correct permissions (OpenShift compatible)
+RUN install -d -m 775 -o "$APP_UID" -g 0 /etc/yt-dlp-plugins/bgutil-ytdlp-pot-provider && \
+    install -d -m 775 -o "$APP_UID" -g 0 /deno-dir && \
+    install -d -m 775 -o "$APP_UID" -g 0 /licenses && \
+    install -d -m 775 -o "$APP_UID" -g 0 /data
 
 # ffmpeg (statically compiled and UPX compressed)
 COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.0 /ffmpeg /usr/bin/
 COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.0 /ffprobe /usr/bin/
 
-# dumb-init
+# dumb-init (signal handling)
 COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.0 /dumb-init /usr/bin/
 
-# Copy POToken server (bgutil-pot) from ghcr.io/jim60105/bgutil-pot:latest
+# Copy POToken server (bgutil-pot)
 COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/bgutil-pot:latest /bgutil-pot /usr/bin/
 
-# Copy POToken client plugin from ghcr.io/jim60105/bgutil-pot:latest
+# Copy POToken client plugin
 COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/bgutil-pot:latest /client /etc/yt-dlp-plugins/bgutil-ytdlp-pot-provider
 
-# yt-dlp (using musllinux build for compatibility with musl libc from Alpine)
-ADD --link --chown=$APP_UID:0 --chmod=775 https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_musllinux /usr/bin/yt-dlp
+# yt-dlp (using Linux build for Debian with glibc)
+ADD --link --chown=$APP_UID:0 --chmod=775 https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux /usr/bin/yt-dlp
 
 # Deno JS runtime for yt-dlp
-ENV LD_LIBRARY_PATH="/usr/local/lib"
-ENV DENO_USE_CGROUPS=1
-ENV DENO_DIR=/deno-dir/
-ENV DENO_INSTALL_ROOT=/usr/local
+ENV DENO_USE_CGROUPS=1 \
+    DENO_DIR=/deno-dir/ \
+    DENO_INSTALL_ROOT=/usr/local
 
-ARG DENO_VERSION
 ENV DENO_VERSION=2.5.6
-COPY --link --chown=$APP_UID:0 --chmod=775 --from=docker.io/denoland/deno:distroless-2.5.6 /bin/deno /usr/bin/
+COPY --link --chown=$APP_UID:0 --chmod=775 --from=docker.io/denoland/deno:bin-2.5.6 /deno /usr/bin/
 
-ENV AZURE_STORAGE_CONNECTION_STRING_VTUBER="ChangeThis"
-ENV CHANNELS_IN_ARRAY="[\"https://www.youtube.com/channel/UCBC7vYFNQoGPupe5NxPG4Bw\"]"
-ENV MAX_DOWNLOAD="10"
-ENV DATE_BEFORE="2"
+# Copy licenses (OpenShift Policy)
+COPY --link --chown=$APP_UID:0 --chmod=775 LICENSE /licenses/LICENSE
+
+# Default environment variables
+ENV AZURE_STORAGE_CONNECTION_STRING_VTUBER="ChangeThis" \
+    CHANNELS_IN_ARRAY="[\"https://www.youtube.com/channel/UCBC7vYFNQoGPupe5NxPG4Bw\"]" \
+    MAX_DOWNLOAD="10" \
+    DATE_BEFORE="2"
 
 ########################################
-# Debug image
+# Debug stage
 ########################################
-FROM mcr.microsoft.com/dotnet/runtime:8.0-alpine AS debug
-ARG APP_UID
+FROM mcr.microsoft.com/dotnet/runtime:8.0 AS debug
+ARG APP_UID=1654
+ARG TARGETARCH
+ARG TARGETVARIANT
 WORKDIR /app
 
 # Install aria2
-RUN apk add --no-cache aria2
-
-COPY --link --chown=$APP_UID:0 --chmod=775 --from=docker.io/denoland/deno:distroless-2.5.6 /lib/*-linux-gnu/* /usr/local/lib/
+RUN --mount=type=cache,id=apt-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/cache/apt \
+    --mount=type=cache,id=aptlists-$TARGETARCH$TARGETVARIANT,sharing=locked,target=/var/lib/apt/lists \
+    apt-get update && apt-get install -y --no-install-recommends aria2
 
 # Create directories with correct permissions
-RUN install -d -m 775 -o $APP_UID -g 0 /etc/yt-dlp-plugins/bgutil-ytdlp-pot-provider && \
-    install -d -m 775 -o $APP_UID -g 0 /deno-dir && \
-    install -d -m 775 -o $APP_UID -g 0 /lib64 && \
-    ln -s /usr/local/lib/ld-linux-* /lib64/
+RUN install -d -m 775 -o "$APP_UID" -g 0 /etc/yt-dlp-plugins/bgutil-ytdlp-pot-provider && \
+    install -d -m 775 -o "$APP_UID" -g 0 /deno-dir
 
 # ffmpeg (statically compiled and UPX compressed)
 COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.0 /ffmpeg /usr/bin/
 COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.0 /ffprobe /usr/bin/
 
-# Copy POToken server (bgutil-pot) from ghcr.io/jim60105/bgutil-pot:latest
+# Copy POToken server (bgutil-pot)
 COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/bgutil-pot:latest /bgutil-pot /usr/bin/
 
-# Copy POToken client plugin from ghcr.io/jim60105/bgutil-pot:latest
+# Copy POToken client plugin
 COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/bgutil-pot:latest /client /etc/yt-dlp-plugins/bgutil-ytdlp-pot-provider
 
-# yt-dlp (using musllinux build for compatibility with musl libc from Alpine)
-ADD --link --chown=$APP_UID:0 --chmod=775 https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_musllinux /usr/bin/yt-dlp
+# yt-dlp (using Linux build for Debian with glibc)
+ADD --link --chown=$APP_UID:0 --chmod=775 https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux /usr/bin/yt-dlp
 
-ENV LD_LIBRARY_PATH="/usr/local/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
-ENV DENO_USE_CGROUPS=1
-ENV DENO_DIR=/deno-dir/
-ENV DENO_INSTALL_ROOT=/usr/local
+# Deno JS runtime for yt-dlp
+ENV DENO_USE_CGROUPS=1 \
+    DENO_DIR=/deno-dir/ \
+    DENO_INSTALL_ROOT=/usr/local
 
-ARG DENO_VERSION
 ENV DENO_VERSION=2.5.6
-COPY --link --chown=$APP_UID:0 --chmod=775 --from=docker.io/denoland/deno:distroless-2.5.6 /bin/deno /usr/bin/
+COPY --link --chown=$APP_UID:0 --chmod=775 --from=docker.io/denoland/deno:bin-2.5.6 /deno /usr/bin/
 
 ########################################
-# Build .NET
+# Build stage
 ########################################
-FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 ARG BUILD_CONFIGURATION=Release
 ARG TARGETARCH
 WORKDIR /src
 
+# Copy project file and restore dependencies
 COPY ["backup-dl.csproj", "."]
-RUN dotnet restore -a $TARGETARCH "backup-dl.csproj"
+RUN dotnet restore -a "$TARGETARCH" "backup-dl.csproj"
 
+########################################
+# Publish stage
+########################################
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
+ARG TARGETARCH
 COPY . .
-RUN dotnet publish "backup-dl.csproj" -a $TARGETARCH -c $BUILD_CONFIGURATION -o /app/publish --self-contained true
+RUN dotnet publish "backup-dl.csproj" -a "$TARGETARCH" -c "$BUILD_CONFIGURATION" -o /app/publish --self-contained true
 
 ########################################
-# Final image
+# Final stage
 ########################################
 FROM base AS final
-ARG APP_UID
+ARG APP_UID=1654
+ARG VERSION
+ARG RELEASE
 
 ENV PATH="/app:$PATH"
 
-# Create directories with correct permissions
-RUN install -d -m 775 -o $APP_UID -g 0 /app
+# Working directory
+WORKDIR /data
 
+# Persistent directories
+VOLUME ["/data", "/tmp"]
+
+# Copy application binary
 COPY --from=publish --chown=$APP_UID:0 /app/publish/backup-dl /app/backup-dl
 
+# Switch to non-root user
 USER $APP_UID
 
+# Signal handling
+STOPSIGNAL SIGINT
+
 # Use dumb-init as PID 1 to handle signals properly
-ENTRYPOINT [ "dumb-init", "--", "/app/backup-dl"]
+ENTRYPOINT ["dumb-init", "--", "/app/backup-dl"]
+
+# Metadata labels
+LABEL name="backup-dl" \
+      vendor="jim60105" \
+      maintainer="jim60105" \
+      url="https://github.com/jim60105/backup-dl" \
+      version=${VERSION} \
+      release=${RELEASE} \
+      io.k8s.display-name="YouTube Backup Downloader" \
+      summary="A .NET Core application to backup YouTube videos to Azure Blob Storage" \
+      description="This application checks YouTube channels and playlists, and backs up videos to Azure Blob Storage. Built with yt-dlp and ffmpeg. For more information, visit: https://github.com/jim60105/backup-dl"
