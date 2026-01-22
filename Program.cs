@@ -92,7 +92,7 @@ namespace backup_dl
                     Output = Path.Combine(tempDir, "%(id)s.%(ext)s"),
                     DownloadArchive = ytdlArchivePath,
                     Downloader = "aria2c",
-                    DownloaderArgs = "-j 16 --retry-wait 10 --max-tries 10 --enable-color=false",
+                    DownloaderArgs = "aria2c:-j 16 --retry-wait 10 --max-tries 10 --enable-color=false",
                     NoResizeBuffer = true,
                     WriteThumbnail = true,
                     Color = "no_color",
@@ -247,10 +247,10 @@ namespace backup_dl
                             if (null == videoData)
                             {
                                 cancel.Cancel();
-                                videoData = null;
+                                return (null, null);
                             }
 
-                            title = videoData?.Title;
+                            title = videoData.Title;
                             duration = videoData.Duration;
 
                             string newPath = CalculatePath(filePath, videoData?.Title, videoData?.UploadDate, videoData?.ChannelId);
@@ -273,7 +273,11 @@ namespace backup_dl
                         }, cancel.Token)
                         .ContinueWith((res) =>
                         {
-                            if (!res.IsCompletedSuccessfully) cancel.Cancel();
+                            if (!res.IsCompletedSuccessfully || res.Result.newPath == null)
+                            {
+                                cancel.Cancel();
+                                return null;
+                            }
 
                             (string newPath, YtdlpVideoData videoData) = res.Result;
                             AddMetaData(newPath, videoData).Wait();
@@ -281,6 +285,11 @@ namespace backup_dl
                         }, cancel.Token)
                         .ContinueWith((res) =>
                         {
+                            if (!res.IsCompletedSuccessfully || res.Result == null)
+                            {
+                                return null;
+                            }
+
                             string newPath = res.Result;
                             AddThumbNailImage(filePath, newPath).Wait();
                             _logger.Information("PostProcess Finish: {path}", res.Result);
@@ -289,8 +298,14 @@ namespace backup_dl
                 }
                 finalTask = task.ContinueWith((res) =>
                     {
+                        if (!res.IsCompletedSuccessfully || res.Result == null)
+                        {
+                            _logger.Error("PostProcess Failed for id: {id}", id);
+                            return null;
+                        }
+
                         string newPath = res.Result;
-                        _logger.Information("Start Uploading: {path}", res.Result);
+                        _logger.Information("Start Uploading: {path}", newPath);
                         Task<bool> task = UploadToAzure(tempDir, newPath, ID: id, duration: duration);
                         task.Wait();
                         return task.IsCompletedSuccessfully && task.Result ? newPath : null;
