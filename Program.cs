@@ -133,6 +133,8 @@ namespace backup_dl
                         var bak = cookies.CopyTo("cookies.copy.txt", true);
                         optionSet.Cookies = CookiesPath = bak.FullName;
                     }
+                }else{
+                    _logger.Information("No cookies file detected, proceeding without it.");
                 }
 
                 YoutubeDLProcess ytdlProc = new(YtdlPath);
