@@ -16,7 +16,10 @@ spec:
           containers:
           - name: backupdl
             env:
-{{ .Values.env | toYaml | indent 14 }}
+            {{- range .Values.env }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
             image: ghcr.io/jim60105/backup-dl:latest
             imagePullPolicy: Always
             securityContext:
