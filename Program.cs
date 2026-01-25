@@ -224,9 +224,17 @@ namespace backup_dl
                         .ContinueWith((res) =>
                         {
                             YtdlpVideoData videoData = null;
-                            if (res.IsCompletedSuccessfully && res.Result.Success)
+                            if (res.IsFaulted)
+                            {
+                                _logger.Error(res.Exception, "Video data fetch failed with exception for id: {id}", id);
+                            }
+                            else if (res.IsCompletedSuccessfully && res.Result.Success)
                             {
                                 videoData = res.Result.Data;
+                            }
+                            else if (res.IsCompletedSuccessfully && !res.Result.Success)
+                            {
+                                _logger.Warning("Video data fetch returned failure for id: {id}, errors: {errors}", id, string.Join(", ", res.Result.ErrorOutput ?? []));
                             }
 
                             // Aria2c會對id做處理，若取影片失敗則試著反相處理再重fetch
@@ -246,6 +254,7 @@ namespace backup_dl
 
                             if (null == videoData)
                             {
+                                _logger.Error("Failed to fetch video data for id: {id}. All retry attempts exhausted.", id);
                                 cancel.Cancel();
                                 return (null, null);
                             }
@@ -273,8 +282,15 @@ namespace backup_dl
                         }, cancel.Token)
                         .ContinueWith((res) =>
                         {
+                            if (res.IsFaulted)
+                            {
+                                _logger.Error(res.Exception, "AddMetaData task failed with exception for id: {id}", id);
+                                cancel.Cancel();
+                                return null;
+                            }
                             if (!res.IsCompletedSuccessfully || res.Result.newPath == null)
                             {
+                                _logger.Debug("Skipping AddMetaData for id: {id} due to previous failure", id);
                                 cancel.Cancel();
                                 return null;
                             }
@@ -285,8 +301,14 @@ namespace backup_dl
                         }, cancel.Token)
                         .ContinueWith((res) =>
                         {
+                            if (res.IsFaulted)
+                            {
+                                _logger.Error(res.Exception, "AddThumbNailImage task failed with exception for id: {id}", id);
+                                return null;
+                            }
                             if (!res.IsCompletedSuccessfully || res.Result == null)
                             {
+                                _logger.Debug("Skipping AddThumbNailImage for id: {id} due to previous failure", id);
                                 return null;
                             }
 
@@ -298,6 +320,11 @@ namespace backup_dl
                 }
                 finalTask = task.ContinueWith((res) =>
                     {
+                        if (res.IsFaulted)
+                        {
+                            _logger.Error(res.Exception, "PostProcess task failed with exception for id: {id}", id);
+                            return null;
+                        }
                         if (!res.IsCompletedSuccessfully || res.Result == null)
                         {
                             _logger.Error("PostProcess Failed for id: {id}", id);

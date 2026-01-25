@@ -53,7 +53,7 @@ internal static partial class YoutubeDL
             DumpSingleJson = true,
             FlatPlaylist = flat,
             WriteComments = fetchComments,
-            ExtractorArgs = new MultiValue<string>("youtubepot-bgutilscript"),
+            ExtractorArgs = new MultiValue<string>("youtube:pot=bgutil-script"),
             Verbose = true
         };
         if (overrideOptions != null)
@@ -64,19 +64,32 @@ internal static partial class YoutubeDL
         YoutubeDLProcess youtubeDLProcess = new(ytdl.YoutubeDLPath);
         youtubeDLProcess.OutputReceived += (o, e) =>
         {
-            // Workaround: Fix invalid json directly
-            var data = e.Data.Replace("\"[{", "[{")
-                             .Replace("}]\"", "}]")
-                             .Replace("False", "false")
-                             .Replace("True", "true");
-            // Change json string from 'sth' to "sth"
-            data = ChangeJsonStringSingleQuotesToDoubleQuotes().Replace(data, @"""$1""");
-            videoData = JsonSerializer.Deserialize<YtdlpVideoData>(
-                data,
-                options: new()
-                {
-                    TypeInfoResolver = SourceGenerationContext.Default
-                });
+            // Skip if data is null or empty
+            if (string.IsNullOrWhiteSpace(e.Data)) return;
+
+            // Only process JSON data (starts with '{')
+            if (!e.Data.TrimStart().StartsWith('{')) return;
+
+            try
+            {
+                // Workaround: Fix invalid json directly
+                var data = e.Data.Replace("\"[{", "[{")
+                                 .Replace("}]\"", "}]")
+                                 .Replace("False", "false")
+                                 .Replace("True", "true");
+                // Change json string from 'sth' to "sth"
+                data = ChangeJsonStringSingleQuotesToDoubleQuotes().Replace(data, @"""$1""");
+                videoData = JsonSerializer.Deserialize<YtdlpVideoData>(
+                    data,
+                    options: new()
+                    {
+                        TypeInfoResolver = SourceGenerationContext.Default
+                    });
+            }
+            catch (JsonException)
+            {
+                // Ignore non-JSON output lines
+            }
         };
         FieldInfo fieldInfo = typeof(YoutubeDLSharp.YoutubeDL).GetField("runner", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.GetField | BindingFlags.SetField);
         (int code, string[] errors) = await (fieldInfo.GetValue(ytdl) as ProcessRunner).RunThrottled(youtubeDLProcess, [url], opts, ct);
