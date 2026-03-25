@@ -74,8 +74,8 @@ RUN install -d -m 775 -o "$APP_UID" -g 0 /etc/yt-dlp-plugins/bgutil-ytdlp-pot-pr
     install -d -m 775 -o "$APP_UID" -g 0 /deno-dir
 
 # ffmpeg (statically compiled and UPX compressed)
-COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.0 /ffmpeg /usr/bin/
-COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.0 /ffprobe /usr/bin/
+COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.1 /ffmpeg /usr/bin/
+COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/static-ffmpeg-upx:8.1 /ffprobe /usr/bin/
 
 # Copy POToken server (bgutil-pot)
 COPY --link --chown=$APP_UID:0 --chmod=775 --from=ghcr.io/jim60105/bgutil-pot:latest /bgutil-pot /usr/bin/
